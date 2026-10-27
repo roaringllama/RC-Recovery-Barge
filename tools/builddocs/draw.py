@@ -31,10 +31,12 @@ def block_height(width_mm, lines):
     return len(info_lines(width_mm, lines)) * LINE
 
 
-def draw_shape(pg, shape, fr, mark, name, text_lines, dims=True, show_mark=True):
-    """Draw the shape. Returns the page y below the part's text block (for packing)."""
+def draw_shape(pg, shape, fr, mark, name, text_lines, dims=True, show_mark=True, text_w=None, vdim=True):
+    """Draw the shape. name '' leaves the name out of the header (the packed templates put it in the text block); text_w is the wrap width of the text block
+    (default: the part width, at least 70 mm); vdim False leaves out the height dimension (the size is also in the text block). Returns the page y below the part's text block."""
     sc = fr.sc
     P = fr.p
+    n0 = len(pg.e)
     x0, y0, x1, y1 = shape.bbox()
     # shape coordinates are normalised so the bbox starts at 0, 0; be safe for others
     ox, oy = fr.ox - x0 * sc, fr.oy + y0 * sc
@@ -54,7 +56,14 @@ def draw_shape(pg, shape, fr, mark, name, text_lines, dims=True, show_mark=True)
             pg.line(cx - 1.5, cy, cx + 1.5, cy, 'thin')
             pg.line(cx, cy - 1.5, cx, cy + 1.5, 'thin')
             if dims:
-                pg.text(cx + c[2] * sc + 1.2, cy - 0.8, 'dia %.1f at %.1f, %.1f' % (2 * c[2], c[1][0] - x0, c[1][1] - y0), 't')
+                txt = 'dia %.1f at %.1f, %.1f' % (2 * c[2], c[1][0] - x0, c[1][1] - y0)
+                edge = P(x1, y0)[0]
+                if cx + c[2] * sc + 1.2 + len(txt) * 1.3 <= edge:
+                    pg.text(cx + c[2] * sc + 1.2, cy - 0.8, txt, 't')
+                elif cx + c[2] * sc + 3.8 <= edge:                      # a hole near the right edge: the label runs up the page beside it
+                    pg.text(cx + c[2] * sc + 3.0, cy, txt, 't', 'middle', -90)
+                else:
+                    pg.text(cx - c[2] * sc - 1.2, cy - 0.8, txt, 't', 'end')
         else:
             pg.poly([P(*q) for q in c[1]], 'cutl')
             if dims:
@@ -92,23 +101,28 @@ def draw_shape(pg, shape, fr, mark, name, text_lines, dims=True, show_mark=True)
     if along * sc >= GRAIN_MIN and across * sc >= 5:
         lx, ly = label_point(shape)
         cx, cy = P(lx, ly)
-        _grain(pg, cx, cy, L, shape.grain)
+        _grain(pg, cx, cy, L, shape.grain, _text_boxes(pg.e[n0:]))
     else:
         # outside, to the right of the part
         a = P(x1, y0 + h / 2)
-        _grain(pg, a[0] + 8, a[1], 10, shape.grain)
+        _grain(pg, a[0] + 8, a[1], 10, shape.grain, _text_boxes(pg.e[n0:]))
     top = P(x0, y1)[1]
     left = P(x0, y1)[0]
     right = P(x1, y1)[0]
     bottom = P(x0, y0)[1]
     if dims:
         pg.dimh(left, right, top - 5, '%.1f' % w, top, top, tdy=-0.9)
-        pg.dimv(top, bottom, left - 5, '%.1f' % h, left, left, tdx=-0.9)
+        if vdim:
+            pg.dimv(top, bottom, left - 5, '%.1f' % h, left, left, tdx=-0.9)
     if show_mark:
         pg.text(left, top - 9.5, mark, 'big')
-        pg.text(left + 3 + 2.6 * len(mark), top - 9.5, name, 't')
-    bw = max(right - left, 70)
+        if name:
+            pg.text(left + 3 + 2.6 * len(mark), top - 9.5, name, 't')
+    bw = text_w or max(right - left, 70)
     y = bottom + 7
+    ext = extent(pg.e[n0:])                      # the text block starts below everything drawn so far (a notch or hole that runs past the bottom edge)
+    if ext:
+        y = max(y, ext[3] + 4.5)
     for ln in info_lines(bw, text_lines):
         pg.text(left, y, ln, 't')
         y += LINE
@@ -157,12 +171,77 @@ def _area(poly):
     return abs(sum(p[0] * q[1] - q[0] * p[1] for p, q in zip(poly, poly[1:] + poly[:1]))) / 2
 
 
-def _grain(pg, cx, cy, L, grain):
+def _text_boxes(elements):
+    return [extent([e]) for e in elements if e.startswith('<text')]
+
+
+def _hit(box, boxes):
+    return any(box[0] < o[2] and o[0] < box[2] and box[1] < o[3] and o[1] < box[3] for o in boxes)
+
+
+def _grain(pg, cx, cy, L, grain, boxes=()):
+    """The grain arrow with its word beside it: above (right of, for a vertical arrow) when that is clear of the text already drawn, else the other side."""
     dx, dy = (L / 2, 0) if grain == 'x' else (0, L / 2)
     pg.line(cx - dx, cy - dy, cx + dx, cy + dy, 'thin')
     pg.arrow(cx + dx, cy + dy, dx, dy)
     pg.arrow(cx - dx, cy - dy, -dx, -dy)
+    w = 5 * TEXT_W['ts']
     if grain == 'x':
-        pg.text(cx, cy - 1.3, 'grain', 'ts', 'middle')
+        spots = [(cx, y) for y in (cy - 1.3, cy + 3.3)] + [(cx + d, y) for d in (-9.0, 9.0) for y in (cy - 1.3, cy + 3.3)]
+        pick = next((q for q in spots if not _hit((q[0] - w / 2, q[1] - TEXT_H['ts'], q[0] + w / 2, q[1] + 0.6), boxes)), spots[0])
+        pg.text(pick[0], pick[1], 'grain', 'ts', 'middle')
     else:
-        pg.text(cx + 1.3, cy, 'grain', 'ts', 'start', -90)
+        spots = [(x, y) for y in (cy, cy + 6.0, cy - 6.0) for x in (cx + 1.3, cx - 0.9)]
+        pick = next((q for q in spots if not _hit(((q[0] - 0.8 * TEXT_H['ts']) if q[0] > cx else (q[0] - TEXT_H['ts']), q[1] - w, (q[0] - 0.8 * TEXT_H['ts'] if q[0] > cx else q[0] - TEXT_H['ts']) + 1.3 * TEXT_H['ts'], q[1]), boxes)), spots[0])
+        pg.text(pick[0], pick[1], 'grain', 'ts', 'start', -90)
+
+
+# ---- measuring a drawing ----------------------------------------------------------------------------------------------------------------------
+TEXT_W = {'t': 1.3, 'ts': 1.1, 'bold': 1.8, 'big': 2.6}      # generous average character width per text class, mm
+TEXT_H = {'t': 2.4, 'ts': 2.0, 'bold': 3.0, 'big': 4.2}      # type size, mm
+_NUM = r'(-?[\d.]+)'
+
+
+def extent(elements):
+    """Bounding box (x0, y0, x1, y1) of the SVG element strings a Page collected: lines, rects, polygons, circles and text (width estimated from the
+    character count, so it errs large). None for an empty list."""
+    import re
+    xs, ys = [], []
+
+    def pt(x, y):
+        xs.append(x)
+        ys.append(y)
+    for e in elements:
+        if e.startswith('<line'):
+            a = [float(v) for v in re.findall(r'(?:x1|y1|x2|y2)="' + _NUM + '"', e)]
+            pt(a[0], a[1])
+            pt(a[2], a[3])
+        elif e.startswith('<rect'):
+            m = re.search(r'x="' + _NUM + r'" y="' + _NUM + r'" width="' + _NUM + r'" height="' + _NUM + '"', e)
+            x, y, w, h = (float(v) for v in m.groups())
+            pt(x, y)
+            pt(x + w, y + h)
+        elif e.startswith('<polygon'):
+            for a, b in re.findall(_NUM + ',' + _NUM, re.search(r'points="([^"]*)"', e).group(1)):
+                pt(float(a), float(b))
+        elif e.startswith('<circle'):
+            m = re.search(r'cx="' + _NUM + r'" cy="' + _NUM + r'" r="' + _NUM + '"', e)
+            cx, cy, r = (float(v) for v in m.groups())
+            pt(cx - r, cy - r)
+            pt(cx + r, cy + r)
+        elif e.startswith('<text'):
+            m = re.search(r'x="' + _NUM + r'" y="' + _NUM + r'" class="(\w+)" text-anchor="(\w+)"(?: transform="rotate\(' + _NUM + r' [^"]*\)")?[^>]*>([^<]*)<', e)
+            x, y, c, anc, rot, t = m.groups()
+            x, y = float(x), float(y)
+            n = len(t.replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>'))
+            w, h = n * TEXT_W.get(c, 1.3), TEXT_H.get(c, 2.4)
+            lo, hi = {'start': (0, w), 'middle': (-w / 2, w / 2), 'end': (-w, 0)}[anc]
+            if rot and abs(float(rot)) > 1:
+                if float(rot) < 0:                  # turned -90: the text runs up the page from its anchor
+                    lo, hi = -hi, -lo
+                pt(x - h, y + lo)
+                pt(x + 0.3 * h, y + hi)
+            else:
+                pt(x + lo, y - h)
+                pt(x + hi, y + 0.3 * h)
+    return (min(xs), min(ys), max(xs), max(ys)) if xs else None

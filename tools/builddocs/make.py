@@ -1,8 +1,8 @@
 """Builder documents: one entry point. Writes everything to out/builddocs/ from the one model (design.py through model/partmarks.py):
 
   cut_list.csv, Cut_List_<REV>.pdf            stock cut list, one table per stock item
-  Nesting_Layouts_<REV>.pdf                   11 x 17 in, one page per stock sheet, sticks on shared pages
-  Templates_Full_Size_<REV>.pdf               letter portrait, 1:1, tiled where a part is larger than a page
+  Nesting_Layouts_<REV>.pdf                   11 x 17 in, several stock pieces to a page at one scale (balsa strips stacked)
+  Templates_Full_Size_<REV>.pdf               letter portrait, 1:1, index of marks, small parts packed, tiled where a part is larger than a page
   Planking_Guide_<REV>.pdf                    letter portrait, sections at the frame stations and the plank tables
   Building_Board_1to2_<REV>.pdf               11 x 17 in at 1:2
   Building_Board_Full_Size_<REV>.pdf          letter portrait tiles at 1:1

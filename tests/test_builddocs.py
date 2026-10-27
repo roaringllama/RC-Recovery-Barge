@@ -170,8 +170,31 @@ def test_g10_blades_pair_inside_the_sheet(tb, nst):
 
 def test_layout_pages(tb, nst):
     doc = layouts.build(tb, nst)
-    n_sheets = sum(nst.count(k) for k, st in tb.stock.items() if st.kind == 'sheet')
-    assert len(doc.pages) >= 1 + n_sheets
+    assert len(doc.pages) < 12                              # summary page plus shared pages (47 pages before the strips shared pages)
+    s = layouts.scale_for(tb, doc)
+    cx, cy, cw, ch = layouts.content_box(doc)
+    longest = max(st.L for st in tb.stock.values() if st.L is not None)
+    assert longest * s <= cw + 1e-6 and cw - longest * s < 1.0       # the longest stock just fits the printable width
+    blocks = layouts.make_blocks(tb, nst, s)
+    assert len(blocks) == sum(len(b) for k, b in nst.bins.items() if tb.stock[k].L is not None)       # every stock piece is drawn once
+    pages = layouts.place_blocks([b for b in blocks if b.key == 'balsa'], cw, ch) + layouts.place_blocks([b for b in blocks if b.key != 'balsa'], cw, ch)
+    assert len(pages) + 1 == len(doc.pages)
+    for pg in pages:
+        rects = [(x, y, x + b.w, y + b.h) for b, x, y in pg['items']]
+        for r_ in rects:
+            assert r_[0] >= -1e-6 and r_[1] >= -1e-6 and r_[2] <= cw + 1e-6 and r_[3] <= ch + 1e-6
+        for i, a in enumerate(rects):
+            for c in rects[i + 1:]:
+                assert a[2] <= c[0] or c[2] <= a[0] or a[3] <= c[1] or c[3] <= a[1]
+        # strips stacked on one page are D.NEST_GAP or more apart: the label zone above a strip is at least that high
+        for b, _, _ in pg['items']:
+            assert b.lh >= D.NEST_GAP - 1e-9 or not b.sheet
+    # balsa strips: as many per page as fit
+    bal = [pg for pg in pages if all(b.key == 'balsa' for b, _, _ in pg['items'])]
+    per = max(len(pg['items']) for pg in bal)
+    assert per >= 4 and all(len(pg['items']) == per for pg in bal[:-1])
+    svg = ''.join(p.svg() for p in doc.pages)
+    assert 'balsa sheet 35 of 35' in svg and 'parts: ' in svg
 
 
 # ---- templates and tiling ----------------------------------------------------------------------------------------------------
@@ -231,6 +254,61 @@ def test_every_template_page_has_scale_bar_and_check_box(tb):
         assert len(segs) == 10
     # page size is letter, portrait
     assert math.isclose(doc.pages[0].Wp, D.LETTER_IN[0] * D.INCH) and math.isclose(doc.pages[0].Hp, D.LETTER_IN[1] * D.INCH)
+
+
+def test_identical_and_mirrored_parts_share_one_drawing(tb):
+    gs = {g['marks'][0]: g for g in templates.groups(tb)}
+    # a port and starboard frame piece are mirror images: one drawing, cut 1 as drawn, 1 mirrored
+    g = gs['F3-P']
+    assert g['marks'] == ['F3-P', 'F3-S'] and (g['n_as'], g['n_mir']) == (1, 1) and templates.qty_text(g) == 'cut 1 as drawn, 1 mirrored'
+    assert gs['SK-P1']['marks'] == ['SK-P1', 'SK-P2', 'SK-S1', 'SK-S2'] and (gs['SK-P1']['n_as'], gs['SK-P1']['n_mir']) == (2, 2)
+    assert 'DO-S' in gs['DO-P']['marks'] and 'BA-S' in gs['BA-P']['marks'] and 'F9-S' in gs['F9-P']['marks']
+    # symmetric brackets are plain duplicates: one drawing, qty 10 (five stations, port and starboard)
+    br = gs['BR-x305-P']
+    assert br['qty'] == 10 and br['n_mir'] == 0 and templates.qty_text(br) == 'qty 10' and len(br['marks']) == 10
+    # every template belongs to exactly one group, and a group's members all share stock and thickness
+    allm = [m for g_ in gs.values() for m in g_['marks']]
+    assert sorted(allm) == sorted(tb.templates) and len(allm) == len(set(allm))
+    for g_ in gs.values():
+        assert all(tb.templates[m].stock == g_['rep'].stock and abs(tb.templates[m].t - g_['rep'].t) < 1e-9 for m in g_['marks'])
+        assert g_['qty'] == sum(tb.templates[m].qty for m in g_['marks'])
+    # a part that differs (notes, outline) is not merged: the sponson bottom and deck skins have the same outline but different features
+    assert 'DK' not in gs['BT']['marks'] and 'SC' not in gs['SK-P1']['marks']
+
+
+def test_small_templates_are_packed_and_indexed(tb):
+    doc = templates.build(tb)
+    n, its = templates.page_count(tb)
+    ww, wh = templates.window_size(doc)[2:]
+    singles = [i for i in its if i['cols'] * i['rows'] == 1]
+    assert len(singles) > 40
+    pages = templates.pack(singles, ww, wh)
+    assert len(pages) < len(singles) / 2                      # several drawings to a page
+    for pg in pages:
+        rects = []
+        for it, x, y in pg:
+            assert x >= -1e-6 and y >= -1e-6 and x + it['pk']['bw'] <= ww + 1e-6 and y + it['pk']['bh'] <= wh + 1e-6
+            rects.append((x, y, x + it['pk']['bw'], y + it['pk']['bh']))
+        g = D.TEMPLATE_GAP - 1e-6
+        for i, a in enumerate(rects):
+            for c in rects[i + 1:]:
+                assert a[2] + g <= c[0] or c[2] + g <= a[0] or a[3] + g <= c[1] or c[3] + g <= a[1]
+    # every mark with a template is on some page, and the index pages (the first pages) name that page
+    on = {}
+    for i, pg in enumerate(doc.pages, 1):
+        for m in pg.marks:
+            on.setdefault(m, []).append(i)
+    assert set(on) == set(tb.templates)
+    n_idx = templates.index_pages_needed(len(tb.templates), wh)
+    assert doc.pages[0].title == 'Index of marks to pages' and doc.pages[n_idx].title != 'Index of marks to pages'
+    text = ' '.join(re.sub(r'<[^>]+>', ' ', pg.svg()) for pg in doc.pages[:n_idx])
+    for m, nums in on.items():
+        assert re.search(r'(^| )%s ' % re.escape(m), text), m
+        assert templates.page_ranges(nums) in text, (m, nums)
+    assert min(min(v) for v in on.values()) > n_idx
+    # a mirrored pair carries its quantity on the drawing
+    f3 = next(p for p in doc.pages if 'F3-P' in p.marks).svg()
+    assert 'cut 1 as drawn, 1 mirrored' in f3 and 'F3-S' in f3
 
 
 def test_registration_crosses_are_shared_by_neighbouring_tiles(tb):

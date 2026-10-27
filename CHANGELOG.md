@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-10-27, v9.3: builder documents, shared pages
+
+Fewer printed pages; no change to the model, the part marks, the nesting result or the 1:1 scale of the templates. Nesting layouts 47 to 11 pages, full size templates 120 to 82 pages.
+
+- Nesting layouts (`tools/builddocs/layouts.py`): every stock piece is drawn at one scale, the largest at which a 36 in stock fits the printable width (0.442, about 1:2.26). A 3 x 36 in balsa sheet is a strip, so 5 strips stack on a page with `NEST_GAP` (12 mm) between them; the label above each strip carries the stock item, its number, size, percent used and the parts list. A piece whose mark does not fit on it carries a one-letter tag, listed in the label. Sticks carry a label line, with marks of short pieces in rows above or below. G10, ply and the sticks share the pages after the balsa. Pages: summary, 7 balsa, 3 shared (11).
+- Templates (`tools/builddocs/templates.py`): port and starboard mirror images (frames F1 to F9, skeg plates, deck overhang strips) are drawn once with `cut 1 as drawn, 1 mirrored`; identical parts, including symmetric port and starboard pairs (deck brackets, bumper arms, motor mount layers) and O1/I1, SV/BV, BL-P/BL-S, are drawn once with `qty N`. 119 templates become 83 drawings; the marks of a drawing are listed on it and the page of each mark is in the index. Drawings that fit a page (measured extent, text included) are packed with `TEMPLATE_GAP` (8 mm) between them by MaxRects, turned 90 degrees where that saves a page (64 drawings on 24 pages; 28 without turning). Larger drawings are tiled as before (19 drawings, 57 pages). The first page is an index of marks to pages; "page n of m" counts it. Every page keeps the 100 mm scale bar and the 50 mm check box.
+- Hole labels near the right edge of a part run up the page beside the hole instead of off the part; the grain word moves clear of other text; the text block starts below any notch or hole that runs past the part's bottom edge; CT and CI (187 mm wide) drop the height dimension (it is in the text block) so they fit a page.
+- `design.py`: `NEST_GAP`, `TEMPLATE_GAP`. Tests: grouping, packing gaps, index, nesting page fit.
+- Findings, not fixed: the 19 tiled drawings (O1/I1, O2, I2, BT, DK, RP, DC, AD-T, AD-B, TK, DO-P/DO-S, DO-F, BB-C, BB-F, SK-P1 to S2, SC, RL, LD-HB, BL-P/BL-S) are wider than the 196 mm window (or, for RL and the 813 mm strips, much longer) and were left as tiles, so 57 of the 82 template pages are tiles and several of them carry only a sliver (SC, BB-F, SK, LD-HB). Sharing tile pages (stacking strips, or filling free space on tile pages with small parts) would save about 10 to 20 more pages but changes the tile labels, so it was not done.
+
 ## 2026-10-27, v9.3: builder documents
 
 New `tools/builddocs/` (called from `build.py` after the sheets) writes `out/builddocs/`: stock cut list (PDF 18 pages, CSV), nesting layouts (47 pages, 11 x 17 in), full-size templates (120 pages, 119 parts, tiled with registration crosses), planking guide (8 pages), building board (2 sheets at 1:2, 12 tiles at 1:1), DXF (ezdxf) and SVG per template, and `part_marks.csv`.
