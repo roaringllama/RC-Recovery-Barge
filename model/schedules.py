@@ -113,7 +113,7 @@ def panels(zd):
     if h and h['kind'] == 'cap':
         x0, x1, ztop = h['x0'], h['x1'], h['ztop']
         bps = [x0] + [s for s in G.PLAN_STATIONS if x0 < s < x1] + [x1]
-        out.append(_P('CT', 'Bow cap top plate', BOTH, 'cap', 'plate', x1 - x0, wf(x0), wf(x1), _trap(wf, bps), D.SPONSON_W, 'flat at Z %.1f, %.1f above the stowed blade' % (ztop, D.CAP_CLR)))
+        out.append(_P('CT', 'Bow cap top plate', BOTH, 'cap', 'plate', x1 - x0, wf(x0), wf(x1), _trap(wf, bps), D.SPONSON_W, 'flat at Z %.1f, %.1f above the %s' % (ztop, D.CAP_CLR, h['governs'])))
         for i, (a, b) in enumerate(zip(bps, bps[1:]), 1):
             Lc = math.hypot(b - a, float(G.outer_off(b) - G.outer_off(a)))
             ha, hb = ztop - zd(a), ztop - zd(b)
@@ -143,8 +143,14 @@ def _near(x, xs):
     return next((s for s in xs if abs(s - x) <= D.FRAME_T), None)
 
 
+def frame_kind(i, bulkhead=False):
+    """Kind of the sponson piece of frame number i: ring, solid, solid_shaft, solid_notch, or bulkhead (BH1, BH2 are solid wherever they fall)."""
+    k = D.FRAME_KIND.get(i, 'ring')
+    return 'bulkhead' if bulkhead and k == 'ring' else k
+
+
 def frames(zd):
-    """Frame schedule. Each frame is a ring of FRAME_RIB members in the sponson plus a tunnel frame above the roof plate."""
+    """Frame schedule. Each frame is a sponson piece (a ring of FRAME_RIB members, or solid) plus a tunnel piece above the roof plate (ring, or solid)."""
     T = D.SKIN_T
     tx0, tx1 = G.trunk_x()
     ty = G.trunk_y()
@@ -158,6 +164,8 @@ def frames(zd):
         th = zd(x) - T - G.ROOF_Z1
         notes = []
         bh = _near(x, G.BH)
+        kind = frame_kind(i, bh is not None)
+        tkind = D.TUNNEL_KIND.get(i, 'ring')
         if bh is not None:
             notes.append('bulkhead BH at X %.1f (solid, sealed)' % bh)
         db = _near(x, D.DECK_BEAMS)
@@ -183,17 +191,67 @@ def frames(zd):
         if tx0 <= x <= tx1:
             wt = float(G.outer_wall_y(x)) - T - ty[1]
             notes.append('trunk strip: sponson frame is %.2f wide beside the trunk' % wt)
-        out.append(dict(mark='F%d' % i, x=x, w_out=wo, w_in=wi, h=h, tun_w=tw, tun_h=th, rib=D.FRAME_RIB, open_w=wi - 2 * D.FRAME_RIB,
-                        open_h=h - 2 * D.FRAME_RIB, t=D.FRAME_T, trunk_w=wt, notes=notes, bulkhead=bh is not None, clash=clash, cut=cut))
+        hole = None
+        if kind == 'solid_shaft':
+            d = D.TUBE_OD + D.SHAFT_HOLE_CLR
+            zc = G.shaft_z(x) - T                                   # hole center above the frame bottom edge (the floor skin top)
+            hole = dict(d=d, y=G.YS, z=zc, notch=zc - d / 2 < 0)
+            notes.append('shaft hole %.1f dia (tube %.0f + %.0f clearance) at Z %.2f, Y %.1f' % (d, D.TUBE_OD, D.SHAFT_HOLE_CLR, G.shaft_z(x), G.YS) +
+                         ('; its center is only %.2f above the frame bottom edge, so it opens through the bottom edge as a notch' % zc if hole['notch'] else ''))
+        notch_w = None
+        if kind == 'solid_notch':
+            notch_w = wi - (wt if wt is not None else 0.0)
+            notes.append('trunk notch %.2f wide, full height (trunk outer face Y %.1f)' % (notch_w, ty[1]))
+        grommet = None
+        if tkind == 'solid_grommet':
+            grommet = dict(d=D.WIRE_HOLE_D, y=0.0, z=D.WIRE_HOLE_D / 2)   # sitting on the roof plate, on the tunnel centerline
+            notes.append('tunnel piece solid with one %.0f wire grommet hole on the roof plate, Y 0' % D.WIRE_HOLE_D)
+        solid = kind != 'ring'
+        out.append(dict(mark='F%d' % i, num=i, x=x, w_out=wo, w_in=wi, h=h, tun_w=tw, tun_h=th, rib=D.FRAME_RIB, open_w=0.0 if solid else wi - 2 * D.FRAME_RIB,
+                        open_h=0.0 if solid else h - 2 * D.FRAME_RIB, t=D.FRAME_T, trunk_w=wt, notes=notes, bulkhead=bh is not None, clash=clash, cut=cut,
+                        kind=kind, solid=solid, tunnel_kind=tkind, tunnel_solid=tkind != 'ring', hole=hole, notch_w=notch_w, grommet=grommet))
     return out
 
 
+def compartments(zd):
+    """Sealed compartments of one sponson, transom to tip: [dict(name, x0, x1, closes, aft, fwd, inside, frames)].
+    A compartment is closed by the transom, a bulkhead (BH1, BH2), a SEAL_FRAMES frame, or the tip face."""
+    fr = frames(zd)
+    marks = {f['mark']: f for f in fr}
+    cuts = [(0.0, 'transom TR')] + sorted([(D.FRAME_X[i - 1], 'F%d (solid)' % i) for i in D.SEAL_FRAMES] +
+                                          [(x, 'BH%d' % n) for n, x in enumerate(G.BH, 1)]) + [(D.LOA, 'tip face TP')]
+    out = []
+    for (a, la), (b, lb) in zip(cuts, cuts[1:]):
+        inside = []
+        if G.MOT_XMIN >= a and G.MOT_XMAX <= b:
+            inside.append('motor and jacket')
+        bx0, bx1 = G.battery_xrange(D.BAT_SLIDE[0])[0], G.battery_xrange(D.BAT_SLIDE[1])[1]
+        if bx0 >= a and bx1 <= b:
+            inside.append('battery on its slide')
+        tx0, tx1 = G.trunk_x()
+        if tx1 > a and tx0 < b:
+            inside.append('blade trunk wall')
+        if G.KEEL_X >= a and G.KEEL_X < b:
+            inside.append('shaft and tube entry at X %.1f' % G.KEEL_X)
+        fs = [f for f in fr if a < f['x'] < b]
+        out.append(dict(x0=a, x1=b, closes='%s to %s' % (la, lb), aft=la, fwd=lb, inside=inside,
+                        frames=['%s (%s)' % (f['mark'], _KIND_TEXT[f['kind']]) for f in fs]))
+    return out
+
+
+_KIND_TEXT = {'ring': 'ring', 'solid': 'solid', 'solid_shaft': 'solid, shaft hole', 'solid_notch': 'solid, trunk notch', 'bulkhead': 'bulkhead'}
+
+
 def stations(zd):
+    fr = frames(zd)
+    kinds = {f['x']: '%s %s%s' % (f['mark'], _KIND_TEXT[f['kind']], ', tunnel solid' if f['tunnel_solid'] else '') for f in fr}
+    kinds[0.0] = 'transom TR'
+    kinds[D.LOA] = 'tip face TP'
     rows = []
     for x in [0.0] + list(D.FRAME_X) + [D.LOA]:
         wo = float(G.sponson_width(x))
         rows.append(dict(x=x, w_out=wo, w_in=wo - 2 * D.SKIN_T, deck=zd(x), wall=zd(x) - 2 * D.SKIN_T, tun_w=2 * (G.HT + float(G.inner_off(x))),
-                         tun_h=zd(x) - D.SKIN_T - G.ROOF_Z1))
+                         tun_h=zd(x) - D.SKIN_T - G.ROOF_Z1, label=kinds.get(x, '')))
     return rows
 
 
@@ -346,13 +404,13 @@ def hatch_totals(hs):
 
 
 # ---- sealing, channels, trim ------------------------------------------------------------------------------
-def sealing():
-    """Penetration and sealing schedule rows: (ref, penetration, where, method, check)."""
+def sealing(zd):
+    """Penetration and sealing schedule rows: (ref, penetration, where, method, check). `zd` is the deck function of the hydro result."""
     hs = D.HATCHES
     n_h = sum(BOTH if h['zone'] == 'sponson' else 1 for h in hs.values())
     names = ', '.join(hs)
     tx0, tx1 = G.trunk_x()
-    bb = G.blade_box()
+    bb = G.blade_servo_box(zd)
     rows = [
         ('S1', 'Hatches %s (%d lids)' % (names, n_h), 'deck, see A-503', 'plug lid, %.1f mm O-ring cord in a groove, rim ring under the deck, %d thumb screws per lid' % (D.CORD_D, D.LATCH_PER_LID),
          'bench test: lid under %.0f mm of water for %.0f min; fill test before every run' % (D.HATCH_TEST_DEPTH, D.HATCH_TEST_MIN)),
@@ -363,7 +421,7 @@ def sealing():
          'rubber bellows if the rod leaves the hull (size %s)' % ('PENDING' if D.PUSHROD_BELLOWS_D is None else '%.1f' % D.PUSHROD_BELLOWS_D), 'cycle full travel, then fill-test'),
         ('S5', 'Blade trunks (2), X %.0f to %.0f' % (tx0, tx1), 'open to the water at the bottom and through the deck into the bow cap',
          'wet well: walls epoxy-filleted to the bottom, the inner wall and the deck edge; the bow cap closes the top above the deck', 'dye test of the trunk walls'),
-        ('S6', 'Blade servo wire (2)', 'deck box X %.0f to %.0f, above the deck' % (bb.x0, bb.x1), 'potted gland through the deck; the servo is IP66, not immersion rated, so it stays above the deck under the cap', 'fill-test the hull with the cap in place'),
+        ('S6', 'Blade servo wire (2)', 'bow cap X %.0f to %.0f, above the deck' % (bb.x0, bb.x1), 'potted gland through the deck; the servo is IP66, not immersion rated, so it stays above the deck under the cap', 'fill-test the hull with the cap in place'),
         ('S7', 'Skeg box to bottom (2)', 'bottom, X 0 to %.1f' % G.SKEG_X0, 'triangular blocking both sides, epoxy fillet, glass over', 'dye test'),
         ('S8', 'Wires through BH1 and BH2', 'bulkheads at X %.1f and %.1f' % G.BH, 'epoxy-potted feedthrough, one per sponson per bulkhead', 'fill-test each compartment'),
         ('S9', 'Water jacket plumbing (2 pickups, 2 outlets)', 'pickup X %s, outlet X %s' % ('PENDING' if D.COOL_PICKUP_X is None else '%.0f' % D.COOL_PICKUP_X, 'PENDING' if D.COOL_OUTLET_X is None else '%.0f' % D.COOL_OUTLET_X),
@@ -379,12 +437,18 @@ def channels():
         ('CH1', 'Steering (both nozzles)', 'one DS3225MG on the tunnel roof', 'pushrod and tie bar; travel about %.0f deg each side (ASSUMED)' % D.STEER_TRAVEL_DEG),
         ('CH2', 'Port throttle', 'port ESC, forward and reverse', 'mixed with CH1 in the transmitter for differential thrust'),
         ('CH3', 'Starboard throttle', 'starboard ESC, forward and reverse', 'mixed with CH1 in the transmitter for differential thrust'),
-        ('CH4', 'Daggerboard', 'DS3225MG blade servo in the deck box', 'spool and line drive the blade forward against a stop; set end points for extended and stowed'),
+        ('CH4', 'Daggerboard', 'DS3225MG blade servo in the bow cap', 'spool and line lift the blade to stow; set end points for extended and stowed'),
         ('CH5, CH6', 'Spare', 'FS-iA6B has six channels', 'unused'),
         ('Power', 'Receiver supply', 'one ESC BEC only', 'pull the red lead of the second ESC receiver cable'),
         ('Power', 'Servo load', 'two DS3225MG on one 6 V / 3 A BEC', 'peak current of both servos is not published: confirm, or add a BEC (open)'),
         ('Power', 'Batteries', 'one 3S pack per ESC', 'one per sponson, sliding %.0f to %.0f' % D.BAT_SLIDE),
     ]
+
+
+# ---- slow-speed study ----------------------------------------------------------------------------
+def slow_speed():
+    """No-load rpm (kV times volts) and the assumed sensorless floor rpm for each pack in design.PACK_V."""
+    return [dict(cells=name, volts=v, noload=D.MOTOR_KV * v, floor=D.FLOOR_FRACTION * D.MOTOR_KV * v) for name, v in D.PACK_V]
 
 
 # ---- open items from design.py --------------------------------------------------------------------

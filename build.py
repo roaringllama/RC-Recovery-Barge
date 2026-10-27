@@ -11,9 +11,9 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, ROOT)
 
 import design as D
-from model import hydro, checks, weights, variants
+from model import hydro, checks, weights, variants, study, geometry
 from tools import build_list
-from sheets import a000, a101, a103, a104, a301, a401, a501, a502, a503, a601, a004, render
+from sheets import a000, a101, a103, a104, a301, a401, a501, a502, a503, a601, render
 
 OUT = os.path.join(ROOT, 'out')
 
@@ -53,8 +53,20 @@ def main():
     print('BLADE SWEEP (out/blade_sweep.csv), batteries at %s' % ' and '.join('%.0f' % x for x in D.SWEEP_BAT_X))
     print(variants.table_text(sweep_rows))
 
+    eff = hydro.round_effect(r)
+    print()
+    print('ROUNDS stern draft %+.2f, bow draft %+.2f, over nozzle top %+.2f (square sections: stern %.2f, bow %.2f; with rounds: stern %.2f, bow %.2f); bilge %.1f cm3 removed, fillets %.1f cm3 added, skeg and shoe edge rounds %.1f cm3 not subtracted' % (
+        eff['d0'], eff['bow'], eff['over'], eff['without']['d0'], eff['without']['bow'], r['d0'], r['bow'], -eff['bilge'], eff['fillet'], -eff['skeg_edges']))
+    srows = study.rows(r, results)
+    for q in srows:
+        print('STUDY %s: prop %.0f, nozzle %.0f, nozzle top Z %.1f, stern draft %.2f, water over the nozzle top %.1f, %.1f after the %.0f trough, checks failed: %s' % (
+            q['label'], q['prop'], q['noz'], q['top'], q['d0'], q['over'], q['margin'], D.TROUGH, ', '.join(q['failed']) or 'none'))
+    hz = geometry.housing(r['deck'])
+    print('CAP X %.1f to %.1f, top Z %.1f (%s governs: stowed blade top %.1f, servo top %.1f), %.1f above the deck at the aft end, %.1f at the bow end' % (
+        hz['x0'], hz['x1'], hz['ztop'], hz['governs'], hz['z_blade'], hz['z_servo'], hz['h0'], hz['h1']))
+
     body = [a101.build(r, alts), a103.build(r), a104.build(r), a301.build(r, alts), a401.build(r, alts), a501.build(r),
-            a502.build(r), a503.build(r), a601.build(r, alts, results), a004.build(sweep_rows)]
+            a502.build(r), a503.build(r), a601.build(r, alts, results, srows)]
     index = [a000.SELF + (a000.CONTENTS,)] + [(sh.no, sh.title, sh.scale, sh.sub) for sh in body]
     sheets = a000.build(r, index) + body
     pdf = os.path.join(OUT, 'RC_Recovery_Cat_Drawings_%s.pdf' % D.REV)

@@ -76,7 +76,7 @@ def hull_items(zd, rho=None):
 def blade_items(zd, rho=None):
     """Daggerboards, trunks, tower or bow cap, blade mechanism for the selected variant, at the stowed position.
     Tower variants carry trunk, tower and mechanism at the tower center. Cap variants carry the cap at the cap center
-    and the servo and spool in the deck box at the hinge."""
+    and the servo, spool and line in the cap at the servo center X."""
     _K = _k(rho)
     cx, _ = G.blade_centroid(extended=False)
     A = G.blade_area()
@@ -93,9 +93,9 @@ def blade_items(zd, rho=None):
         it.append(('Blades', 'Tower shell %.0f x %.0f x %.0f' % (D.TOWER_L, D.TOWER_W, D.TOWER_H), D.TOWER_MASS, h['xc']))
     else:
         it.append(('Blades', 'Bow cap (2), X %.0f to %.0f, %.0f to %.0f above the deck' % (h['x0'], h['x1'], h['h0'], h['h1']), D.TOWER_MASS, h['xc']))
-    if b['housing'] == 'cap':
-        bx = G.blade_box()
-        it.append(('Blades', 'Blade servo DS3225, spool, line, deck box X %.0f to %.0f' % (bx.x0, bx.x1), D.BLADE_MECH_MASS, (bx.x0 + bx.x1) / 2))
+    sb = G.blade_servo_box(zd)
+    if sb:
+        it.append(('Blades', 'Blade servo DS3225, spool, line, in the bow cap X %.0f to %.0f' % (sb.x0, sb.x1), D.BLADE_MECH_MASS, (sb.x0 + sb.x1) / 2))
     else:
         it.append(('Blades', 'Blade servo DS3225, spool, line', D.BLADE_MECH_MASS, G.tower_xc()))
     return it

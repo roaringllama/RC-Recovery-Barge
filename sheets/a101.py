@@ -70,10 +70,16 @@ def build(r=None, alts=None):
         sh.rect(xs(ux1), zs(zd(ux1) + D.TOWER_H), (ux1 - ux0) * s, D.TOWER_H * s, 'gray')
     elif hs:
         sh.poly(P([(ux0, zd(ux0)), (ux1, zd(ux1)), (ux1, hs['top'](ux1)), (ux0, hs['top'](ux0))]), 'gray')
-    bb = G.blade_box() if bp['housing'] == 'cap' else None
+    bb = G.blade_servo_box(zd) if bp['housing'] == 'cap' else None
     if bb:
-        sh.poly(P([(bb.x0, zd(bb.x0)), (bb.x1, zd(bb.x1)), (bb.x1, zd(bb.x1) + bb.z1), (bb.x0, zd(bb.x0) + bb.z1)]), 'elec')
-        sh.text(xs((bb.x0 + bb.x1) / 2), zs(zd(bb.x0) + bb.z1 / 2), 'servo box', 'ts', 'middle')
+        spx, spz = G.spool_pos(zd)
+        ae, as_ = G.line_attach(True), G.line_attach(False)
+        sh.rect(xs(bb.x1), zs(bb.z1), (bb.x1 - bb.x0) * s, (bb.z1 - bb.z0) * s, 'elec')
+        sh.line(xs(ae[0]), zs(ae[1]), xs(spx), zs(spz), 'thk')                    # lift line, blade extended: straight up from the upper edge
+        sh.line(xs(as_[0]), zs(as_[1]), xs(spx), zs(spz), 'hid')                  # lift line, blade stowed
+        sh.circ(xs(spx), zs(spz), 1.2, 'obj', 'style="fill:#fff"')
+        sh.circ(xs(ae[0]), zs(ae[1]), 0.6, 'obj', 'style="fill:#111"')
+        sh.text(xs(bb.x0) + 1.5, zs(bb.z0) + 3.4, 'servo', 'ts', 'start')
     sh.poly(P(G.blade_outline(True)), 'blade')
     sh.poly(P(G.blade_outline(False)), 'hid')
     sh.circ(xs(bp['hinge_x']), zs(bp['hinge_z']), 0.8, 'obj', 'style="fill:#fff"')
@@ -99,7 +105,7 @@ def build(r=None, alts=None):
     tg(17, (G.ROD_X0 + G.ROD_X1) / 2, G.ZR, 0, 20)
     tg(18, G.POSTX, G.ZR, 9, -16)
     if bb:
-        tg(16, (bb.x0 + bb.x1) / 2, zd(bb.x0) + bb.z1, 0, 14)
+        tg(16, (bb.x0 + bb.x1) / 2, bb.z1, 0, 14)
     # dims
     yb = zs(-125)
     sh.dimh(xs(0), xs(G.SHOE_X1), yb, '%.0f shoe' % (-G.SHOE_X1), zs(G.SHOE_BOT), zs(G.SHOE_BOT))
@@ -164,7 +170,8 @@ def build(r=None, alts=None):
         sh.text(xs((ux0 + ux1) / 2), ys(float(G.outer_wall_y(ux0)) + 8), 'bow cap', 'ts', 'middle')
     if bb:
         sh.rect(xs(bb.x1), ys(bb.y1), (bb.x1 - bb.x0) * s, (bb.y1 - bb.y0) * s, 'elec')
-        sh.text(xs((bb.x0 + bb.x1) / 2), ys(0), 'servo box', 'ts', 'middle')
+        sh.text(xs((bb.x0 + bb.x1) / 2), ys((bb.y0 + bb.y1) / 2) + 0.8, 'servo', 'ts', 'middle')
+        sh.circ(xs(G.line_x()), ys(G.blade_y()), 0.9, 'obj', 'style="fill:#fff"')
     sh.rect(xs(0), ys(D.AFT_DECK_W / 2), D.AFT_DECK_L * s, D.AFT_DECK_W * s, 'thin', 'style="fill:none"')
     sh.rect(xs(D.LOA), ys(D.BEAM / 2), D.PUSH_PAD_T * s, D.BEAM * s, 'cut')
     sh.dimh(xs(D.LOA), xs(-D.AFT_DECK_L), ys(-D.AFT_DECK_W / 2) + 4, '%.1f overall = %.0f hull + %.1f aft deck' % (D.LOA + D.AFT_DECK_L, D.LOA, D.AFT_DECK_L), ys(-D.AFT_DECK_W / 2) + 1, ys(-D.AFT_DECK_W / 2) + 1)
@@ -188,9 +195,10 @@ def build(r=None, alts=None):
             '11 Steering servo DS3225 on its side on the roof, %.0f high, %.0f x %.1f footprint, hatch HS' % (D.STEER_SERVO['h'], D.STEER_SERVO['l'], D.STEER_SERVO['w']),
             '12 Receiver on the tunnel roof, X %.0f to %.0f, hatch HC' % (D.RX['x0'], D.RX['x0'] + D.RX['l']),
             '13 Aft deck over nozzles, %.1f x %.0f' % (D.AFT_DECK_L, D.AFT_DECK_W),
-            ('14 Blade tower %.0f x %.0f x %.0f over the trunk' % (D.TOWER_L, D.TOWER_W, D.TOWER_H)) if hs and hs['kind'] == 'tower' else '14 Bow cap over the stowed blade, X %.0f to %.0f' % (ux0, ux1),
+            ('14 Blade tower %.0f x %.0f x %.0f over the trunk' % (D.TOWER_L, D.TOWER_W, D.TOWER_H)) if hs and hs['kind'] == 'tower' else '14 Bow cap, X %.0f to %.0f, top Z %.1f, %.1f above the deck at the aft end' % (ux0, ux1, hs['ztop'], hs['h0']),
             '15 Tunnel roof plate, Z %.1f to %.1f' % (D.ROOF_Z0, G.ROOF_Z1),
-            ('16 Blade servo and spool deck box at the hinge, X %.0f to %.0f, %.0f high' % (bb.x0, bb.x1, bb.z1)) if bb else '',
+            ('16 Blade servo DS3225 on its side in the bow cap, X %.0f to %.0f, Y %.1f to %.1f, on a shelf at Z %.1f; spool at X %.0f; lift line from the blade upper edge %.0f from the hinge' % (
+                bb.x0, bb.x1, bb.y0, bb.y1, bb.z0, G.line_x(), D.LINE_R)) if bb else '',
             '17 Pushrod, 2-56 rod %.2f dia, Z %.1f, Y %.1f, %.0f between link centers; transom hole %.0f with a %.0f x %.0f bellows' % (D.ROD_D, G.ZR, G.ROD_Y, G.ROD_L, D.ROD_HOLE_D, D.BELLOWS_OD, D.BELLOWS_L),
             '18 Tie bar %.0f x %.0f brass, %.1f long, X %.0f, Z %.1f; two %.0f arm horns point to port' % (D.TIE_BAR, D.TIE_BAR, G.TIE_L, G.POSTX, G.ZR, D.NOZ_HORN_ARM),
             'WL Waterline at rest (blue dashed)']
@@ -202,15 +210,14 @@ def build(r=None, alts=None):
     sh.text(X0, y, 'TRIM AT REST (A-601 %s, %s g)' % (D.REV, format(round(r['W']), ',')), 'tb'); y += 4.6
     for b, rr in trim_rows:
         sh.text(X0, y, 'Bat %.0f: stern %.1f, bow %.1f, over nozzle %.1f' % (b, rr['d0'], rr['bow'], rr['over']), 't'); y += 4.4
-    sh.text(X0, y, 'Hull hangs %.1f below the keel at the transom' % -G.SHOE_BOT, 't'); y += 4.4
-    sh.text(X0, y, 'Over nozzle less %.0f trough: %.1f at design' % (D.TROUGH, r['over'] - D.TROUGH), 't'); y += 4.4
-    sh.text(X0, y, 'Excludes nozzles, props, mounts, fittings (A-601)', 't'); y += 7
+    sh.text(X0, y, 'Hull hangs %.1f below the keel; over nozzle less %.0f trough: %.1f' % (-G.SHOE_BOT, D.TROUGH, r['over'] - D.TROUGH), 't'); y += 4.4
+    sh.text(X0, y, 'Excludes nozzles, props, mounts, fittings (A-601)', 't'); y += 5
     sh.text(X0, y, 'GENERAL', 'tb'); y += 4.6
     gen = ['All hull panels %.3f mm (1/8 in) balsa, glassed.' % T,
-           'Sponsons %.2f wide, %.1f at the transom, tapering to X %.0f; %.0f deg bow, %.0f tip.' % (D.SPONSON_W, D.AFT_W, D.AFT_TAPER_X, D.BOW_TAPER_DEG, D.TIP_W),
-           'Tunnel %.1f wide, full length; keel flat.' % D.TUNNEL_W,
-           'Blade (%s): R%.0f, %.0f deg sector, hinge X %.0f. Extended solid, retracted dashed (rotated up %.0f deg about the hinge).' % (D.BLADE_VARIANT, bp['R'], bp['sector_deg'], bp['hinge_x'], bp['sector_deg']),
-           ('Blade plane at Y %.1f in a %.0f wide trunk against the tunnel wall (X %.0f to %.0f); profile shows it projected onto the section. Batteries %.0f outboard to clear the trunk.' % (G.blade_y(), bp['trunk_w'], tx0, tx1, D.BAT_Y_OFFSET)) if bp['side'] == 'tunnel' else 'Blade and trunk on the sponson centerline.',
+           'Sponsons %.2f wide, %.1f at the transom, tapering to X %.0f; tunnel %.1f wide.' % (D.SPONSON_W, D.AFT_W, D.AFT_TAPER_X, D.TUNNEL_W),
+           'Blade (%s): R%.0f, %.0f deg sector, hinge X %.0f. Tip stops %.1f short of the trunk end (X %.0f).' % (
+               D.BLADE_VARIANT, bp['R'], bp['sector_deg'], bp['hinge_x'], G.tip_to_trunk_end(), tx1),
+           ('Blade plane at Y %.1f in a %.0f wide trunk, X %.0f to %.0f. Batteries %.0f outboard.' % (G.blade_y(), bp['trunk_w'], tx0, tx1, D.BAT_Y_OFFSET)) if bp['side'] == 'tunnel' else 'Blade and trunk on the sponson centerline.',
            ]
     for t in gen:
         y = para(sh, X0, y, t, 58, step=4.2) + 0.2

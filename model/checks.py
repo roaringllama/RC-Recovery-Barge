@@ -1,6 +1,6 @@
 """Interference and fit checks. Each check takes the design hydro result and returns (name, pass_bool, message).
 
-Checks 1 to 10 are the required set. 9b and 11 to 18 are additions. Check 6 is a warning, not a failure.
+Checks 1 to 10 are the required set. 9b and 11 to 21 are additions. Check 6 is a warning, not a failure.
 Nothing here alters a design value; failures are reported only.
 """
 import math
@@ -8,6 +8,7 @@ from collections import namedtuple
 import design as D
 from . import geometry as G
 from . import hydro
+from . import schedules as S
 
 WARN_ONLY = ('6',)
 
@@ -305,7 +306,95 @@ def c18(r):
                 'spare' if need <= D.NOZ_POST_STOCK_L else 'stock too short by', abs(D.NOZ_POST_STOCK_L - need), int(D.NOZ_POST_STOCK_L // need)))
 
 
-ALL = (c1, c2, c3, c4, c5, c6, c7, c8, c9, c9b, c10, c11, c12, c13, c14, c15, c16, c17, c18)
+def c19(r):
+    """The blade tip, extended or stowed, stops at least TRUNK_TIP_CLR short of the trunk end it points toward."""
+    b = G.blade_params()
+    x0, x1 = G.blade_xrange()
+    t0, t1 = G.trunk_x()
+    gap = G.tip_to_trunk_end()
+    end = t1 if b['dir'] == 'fwd' else t0
+    tip = x1 if b['dir'] == 'fwd' else x0
+    return ('19 Blade tip clears the trunk end', gap >= D.TRUNK_TIP_CLR,
+            'variant %s: blade tip (extended and stowed) at X %.1f, trunk end at X %.1f, clearance %.1f; need >= %.0f' % (D.BLADE_VARIANT, tip, end, gap, D.TRUNK_TIP_CLR))
+
+
+def c20(r):
+    """The blade servo fits inside the bow cap footprint, outboard of the blade plane (the blade is a plane at its Y), inside the servo bay, and
+    the lift line runs straight up through the open part of the trunk."""
+    zd = r['deck']
+    h = G.housing(zd)
+    sb = G.blade_servo_box(zd)
+    if sb is None or h is None or h['kind'] != 'cap':
+        return ('20 Blade servo fits in the bow cap', True, 'variant %s has no bow cap servo' % D.BLADE_VARIANT)
+    bay0, bay1 = D.BLADE_SERVO_BAY
+    lo = max(float(G.inner_wall_y(x)) for x in (sb.x0, sb.x1)) + D.SKIN_T
+    hi = min(float(G.outer_wall_y(x)) for x in (sb.x0, sb.x1)) - D.SKIN_T
+    plane = G.blade_y() + G.blade_thickness() / 2                     # outboard face of the blade plane
+    over = [p[0] for p in G.stowed_above(zd)]
+    tx0, tx1 = G.trunk_x()
+    ox0, ox1 = max(min(over), tx0), min(max(over), tx1)
+    lx = G.line_x()
+    edge = max(G.blade_top_at(x, False) for x in (sb.x0, sb.x1))
+    top_clr = h['ztop'] - sb.z1
+    spool = G.spool_pos(zd)
+    probs = []
+    if not (bay0 <= sb.x0 and sb.x1 <= bay1):
+        probs.append('servo X %.0f to %.0f is outside the bay X %.0f to %.0f' % (sb.x0, sb.x1, bay0, bay1))
+    if not (h['x0'] <= sb.x0 and sb.x1 <= h['x1']):
+        probs.append('servo X %.0f to %.0f is outside the cap X %.1f to %.1f' % (sb.x0, sb.x1, h['x0'], h['x1']))
+    if not (lo <= sb.y0 and sb.y1 <= hi):
+        probs.append('servo Y %.1f to %.1f is outside the cap interior Y %.1f to %.1f' % (sb.y0, sb.y1, lo, hi))
+    if sb.y0 < plane:
+        probs.append('servo reaches %.1f into the blade plane (Y %.1f)' % (plane - sb.y0, G.blade_y()))
+    if top_clr < D.CAP_CLR:
+        probs.append('servo top is %.1f under the cap top, need >= %.0f' % (top_clr, D.CAP_CLR))
+    if not (ox0 <= lx <= ox1):
+        probs.append('line X %.1f is outside the open part of the trunk X %.1f to %.1f' % (lx, ox0, ox1))
+    return ('20 Blade servo fits in the bow cap', not probs,
+            ('; '.join(probs) if probs else 'servo inside the cap and the bay') +
+            '; servo X %.0f to %.0f, Y %.1f to %.1f (cap interior Y %.1f to %.1f), Z %.1f to %.1f; '
+            'outboard of the blade plane (face Y %.1f) by %.1f; cap top Z %.1f (%s governs), %.1f above the servo top; '
+            'line X %.1f, spool Z %.1f, %.0f from the hinge, open trunk X %.1f to %.1f' % (
+                sb.x0, sb.x1, sb.y0, sb.y1, lo, hi, sb.z0, sb.z1, plane, sb.y0 - plane, h['ztop'], h['governs'], top_clr,
+                lx, spool[1], D.LINE_R, ox0, ox1))
+
+
+def c21(r):
+    """Solid frames and cap ribs against what is in their way: a solid tunnel piece against the roof equipment, a solid sponson piece against the
+    motor, the battery slide and the mount, and the cap rib of a frame inside the bow cap against the blade servo and the lift line."""
+    zd = r['deck']
+    half = D.FRAME_T / 2
+    hits, ok_rows = [], []
+    h = G.housing(zd)
+    sb = G.blade_servo_box(zd)
+    tx0, tx1 = G.trunk_x()
+    bat0, bat1 = G.battery_xrange(D.BAT_SLIDE[0])[0], G.battery_xrange(D.BAT_SLIDE[1])[1]
+    for f in S.frames(zd):
+        x = f['x']
+        if f['tunnel_solid']:
+            for nm, bx in (('ESC', G.esc_boxes()[0]), ('receiver', G.rx_box()), ('steering servo', G.steer_servo_box())):
+                ov = min(x + half, bx.x1) - max(x - half, bx.x0)
+                if ov > 0:
+                    hits.append('%s tunnel piece (solid, X %.1f to %.1f) crosses the %s (X %.1f to %.1f) by %.1f in X; grommet hole %.0f at Y 0 on the roof plate%s' % (
+                        f['mark'], x - half, x + half, nm, bx.x0, bx.x1, ov, D.WIRE_HOLE_D,
+                        ', hatch ' + ', '.join(f['cut']) + ' lies over it' if f['cut'] else ''))
+            ok_rows.append(f['mark'] + ' tunnel piece')
+        if f['solid']:
+            for nm, a, b in (('motor', G.MOT_XMIN, G.MOT_XMAX), ('battery slide', bat0, bat1), ('motor mount', G.MOUNT[0][0], G.MOUNT[1][0])):
+                if a < x + half and b > x - half:
+                    hits.append('%s sponson piece (solid) crosses the %s (X %.1f to %.1f)' % (f['mark'], nm, a, b))
+            if tx0 <= x <= tx1 and f['kind'] != 'solid_notch' and f['kind'] != 'bulkhead':
+                hits.append('%s sponson piece (solid) crosses the blade trunk (X %.0f to %.0f) with no notch' % (f['mark'], tx0, tx1))
+            ok_rows.append(f['mark'] + ' sponson piece')
+        if h and h['kind'] == 'cap' and sb and h['x0'] < x < h['x1']:
+            if sb.x0 < x + half and sb.x1 > x - half:
+                hits.append('%s cap rib (X %.1f, inside the bow cap) crosses the blade servo (X %.0f to %.0f)%s' % (
+                    f['mark'], x, sb.x0, sb.x1, ' and the lift line at X %.0f' % G.line_x() if abs(x - G.line_x()) <= half else ''))
+    return ('21 Solid frames and cap ribs clear the equipment', not hits,
+            ('; '.join(hits) if hits else 'no conflicts') + '; %d solid pieces and the cap ribs tested' % len(ok_rows))
+
+
+ALL = (c1, c2, c3, c4, c5, c6, c7, c8, c9, c9b, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21)
 
 
 def run_all(r=None):

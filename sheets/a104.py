@@ -21,6 +21,7 @@ def build(r=None):
     bY = G.blade_y()                                  # blade plane, port side (the sponson centerline for center variants)
     ty0, ty1 = G.trunk_y()
     bat = G.battery_boxes(D.DESIGN_BAT_X)[0]
+    sbx = G.blade_servo_box(zd)
     zmax = max(max(p[1] for p in ret), hs['top'](hs['x0']) if hs and hs['kind'] == 'cap' else zd(D.LOA) + D.TOWER_H, zd(G.tower_xc()) + D.TOWER_H if bp['housing'] == 'tower' else 0)
     oy = 137
 
@@ -33,22 +34,14 @@ def build(r=None):
             a, b = sorted((ys(Y0), ys(Y1)))
             sh.rect(a, zs(Z1), b - a, (Z1 - Z0) * s, c, extra)
 
-        def section(X, c_out, fill='#fff', skin=True):
+        def section(X, c_out, fill='#fff', skin=True, skeg=True):
+            """Sponson sections at station X, both sponsons: both bilge corners rounded, the skeg box and its root fillets where X is over the skeg."""
             D_ = zd(X)
             for sg in (1, -1):
-                yi = sg * float(G.inner_wall_y(X)); yo = sg * float(G.outer_wall_y(X))
-                rr = min(R, abs(yo - yi))
-                pts = [(yi, 0), (yo - sg * rr, 0)]
-                for i in range(1, 13):
-                    a = math.radians(90) * i / 12
-                    pts.append((yo - sg * rr + sg * rr * math.sin(a), rr - rr * math.cos(a)))
-                pts += [(yo, D_), (yi, D_)]
-                sh.poly([(ys(y), zs(z)) for y, z in pts], c_out, 'style="fill:%s"' % fill)
+                pts = G.sponson_section(X, D_) if skeg else G.hull_section(X, D_)
+                sh.poly([(ys(sg * y), zs(z)) for y, z in pts], c_out, 'style="fill:%s"' % fill)
                 if skin:
-                    sh.line(ys(yi + sg * T), zs(T), ys(yo - sg * rr), zs(T), 'thin')
-                    sh.line(ys(yi + sg * T), zs(D_ - T), ys(yo - sg * T), zs(D_ - T), 'thin')
-                    sh.line(ys(yi + sg * T), zs(T), ys(yi + sg * T), zs(D_ - T), 'thin')
-                    sh.line(ys(yo - sg * T), zs(rr), ys(yo - sg * T), zs(D_ - T), 'thin')
+                    sh.poly([(ys(sg * y), zs(z)) for y, z in G.hull_section(X, D_, T)], 'thin', 'style="fill:none"')
             yin = G.HT + float(G.inner_off(X))
             return D_, yin
 
@@ -98,7 +91,11 @@ def build(r=None):
         for sg in (1, -1):
             yc = sg * G.YS
             fill_g = 'style="fill:#e4e4e4"' if look < 0 else ''
-            box(yc - D.SKEG_W / 2, yc + D.SKEG_W / 2, G.SHOE_BOT, 0, c, fill_g)
+            if look > 0:
+                re_ = min(D.SKEG_EDGE_R, G.skeg_depth(0))
+                sk = [(-G.SKEG_S, 0.0), (-G.SKEG_S, G.SHOE_BOT + re_)] + [(-G.SKEG_S + re_ - re_ * math.cos(math.pi / 2 * i / 12), G.SHOE_BOT + re_ - re_ * math.sin(math.pi / 2 * i / 12)) for i in range(13)]
+                sk += [(-y_, z_) for y_, z_ in reversed(sk)]
+                sh.poly([(ys(yc + y_), zs(z_)) for y_, z_ in sk], c)                       # hidden behind the bow face: skeg and shoe, bottom corners rounded
             sh.circ(ys(yc), zs(D.PROP_Z), D.NOZ_OD / 2 * s, c, 'style="fill:#f6e3c2"' if look < 0 else '')
             sh.circ(ys(yc), zs(D.PROP_Z), D.PROP_D / 2 * s, c)
             sh.circ(ys(yc), zs(D.PROP_Z), 1.0, 'obj')
@@ -109,6 +106,9 @@ def build(r=None):
         if look < 0:
             zda = zd(-D.AFT_DECK_L / 2)
             box(-D.AFT_DECK_W / 2, D.AFT_DECK_W / 2, zda - D.AFT_DECK_T, zda)
+        if bp['housing'] == 'cap' and sbx:
+            for sg in (1, -1):
+                box(sg * sbx.y0, sg * sbx.y1, sbx.z0, sbx.z1, 'hid')
         # retracted blade, dashed, on top of everything
         for sg in (1, -1):
             box(sg * bY - bt / 2, sg * bY + bt / 2, bp['hinge_z'], z_hi, 'hid')
@@ -143,12 +143,12 @@ def build(r=None):
     view(118, 'BOW VIEW', 'looking aft from ahead; bow face, blades extended solid and retracted dashed, skegs and nozzles hidden', +1)
     view(318, 'STERN VIEW', 'looking forward from astern; transom section, aft deck removed except its edge', -1)
     y = 233
-    for t in ['%.3f mm (1/8 in) planked balsa over frames, glass both sides. Outer bilge sanded to R%.0f (PENDING, shown); inner tunnel corners stay square (blocking inside).' % (T, R),
+    for t in ['%.3f mm (1/8 in) planked balsa over frames, glass both sides. Both bottom corners of each sponson, outer and tunnel side, are sanded to R%.0f (PENDING); where a section is narrower than 2 x R the radius is half the width (the stern section is %.1f wide, R%.1f). Skeg root fillets R%.0f and skeg and shoe edge rounds R%.0f (ASSUMED).' % (T, R, float(G.sponson_width(0)), float(G.bilge_r(0)), D.SKEG_ROOT_R, D.SKEG_EDGE_R),
               'Sponsons %.2f wide at the maximum section, %.1f at the transom with a straight taper to X %.0f (approved by the taper study); stern view shows the transom section, the full width as dashed lines.' % (D.SPONSON_W, D.AFT_W, D.AFT_TAPER_X),
               'Deck height: %.1f at the bow, %.1f at the transom; the deck is parallel to the waterline. Freeboard %.0f. Batteries at %.0f.' % (zd(D.LOA), zd(0), D.FREEBOARD, D.DESIGN_BAT_X),
-              'Below the keel: skeg %.0f wide, shoe bottom %.1f below the keel, nozzle %.0f OD on a level axis at Z %.0f. Nozzle top %.1f under water at rest.' % (D.SKEG_W, -G.SHOE_BOT, D.NOZ_OD, D.PROP_Z, r['over']),
-              ('Blade (%s): plane at Y %.1f in a %.0f wide trunk against the tunnel wall (Y %.1f to %.1f); extended %.1f below the keel (solid); retracted it rises to Z %.1f (dashed), through the deck into the bow cap, %.0f above the deck at the aft end and %.0f at the bow end. Batteries sit %.0f outboard (Y %.1f to %.1f) to clear the trunk.' % (
-                  D.BLADE_VARIANT, bY, bp['trunk_w'], ty0, ty1, G.blade_depth(), max(p[1] for p in ret), hs['h0'], hs['h1'], D.BAT_Y_OFFSET, bat.y0, bat.y1)) if bp['housing'] == 'cap' else
+              'Below the keel: skeg %.0f wide, shoe bottom %.1f below the keel, nozzle %.0f OD with a %.0f prop on a level axis at Z %.0f. Nozzle top %.1f under water at rest.' % (D.SKEG_W, -G.SHOE_BOT, D.NOZ_OD, D.PROP_D, D.PROP_Z, r['over']),
+              ('Blade (%s): plane at Y %.1f in a %.0f wide trunk against the tunnel wall (Y %.1f to %.1f); extended %.1f below the keel (solid); retracted it rises to Z %.1f (dashed), through the deck into the bow cap, %.1f above the deck at the aft end and %.1f at the bow end. The blade servo (hidden, dashed) sits in the cap outboard of the blade plane, Y %.1f to %.1f. Batteries sit %.0f outboard (Y %.1f to %.1f) to clear the trunk.' % (
+                  D.BLADE_VARIANT, bY, bp['trunk_w'], ty0, ty1, G.blade_depth(), max(p[1] for p in ret), hs['h0'], hs['h1'], sbx.y0, sbx.y1, D.BAT_Y_OFFSET, bat.y0, bat.y1)) if bp['housing'] == 'cap' else
               'Blade (%s): extended %.1f below the keel (solid); retracted it rises to Z %.1f (dashed), through the deck into the %.0f x %.0f x %.0f tower.' % (D.BLADE_VARIANT, G.blade_depth(), max(p[1] for p in ret), D.TOWER_L, D.TOWER_W, D.TOWER_H)]:
         y = para(sh, 14, y, t, 205, step=4.2, hang=0) + 0.4
     return sh

@@ -15,7 +15,7 @@ When something does not fit, record it in the checks report; do not alter a valu
 """
 
 # ---- document ----------------------------------------------------------------------------------
-REV = 'v9.1'                    # sheet revision label, used on every sheet and in the output file name, APPROVED (bumped with the battery position 475 and the hatch, linkage and check changes)
+REV = 'v9.2'                    # sheet revision label, used on every sheet and in the output file name, APPROVED (owner review 2026-10-27: blade R375, servo in the bow cap, rounded underwater edges, solid frames, studies)
 REV_DATE = '2026-10-27'         # sheet date, APPROVED
 PROJECT = 'RC Recovery Barge, 32 in sailboat recovery catamaran'   # title block text, APPROVED
 
@@ -29,7 +29,9 @@ BOW_TAPER_DEG = 25.0            # bow taper angle of the outer wall; start X der
 AFT_W = 25.4                    # sponson width at the transom, APPROVED by the taper study
 AFT_TAPER_X = 305.0             # straight taper reaches full sponson width here, symmetric about the sponson centerline, APPROVED
 SKIN_T = 3.175                  # planked balsa over frames (1/8 in), APPROVED
-BILGE_R = 15.0                  # outer bilge sanded radius, drawn only (not in the hydrostatics), PENDING
+BILGE_R = 15.0                  # bilge sanded radius on BOTH bottom corners of each sponson (outer and tunnel side); where a section is narrower than 2 R the radius is half the width; in the hydrostatics and the sections, PENDING
+SKEG_ROOT_R = 8.0               # fillet radius where the skeg box meets the hull bottom, both sides; limited by the local skeg depth; its volume is added to the skeg buoyancy, ASSUMED
+SKEG_EDGE_R = 6.0               # round on the skeg bottom edge and the shoe outer (bottom) edges, drawn; its volume is reported but not subtracted in the hydrostatics, ASSUMED
 FREEBOARD = 60.0                # deck height above the waterline, deck parallel to the waterline, APPROVED
 DESIGN_BAT_X = 475.0            # battery center X at the design position; the deck is built parallel to the waterline at this position, APPROVED (owner, 2026-10-26)
 BAT_SLIDE = (475.0, 590.0)      # battery center X travel on the slide, APPROVED
@@ -77,7 +79,9 @@ SHAFT_MARGIN = 5.0              # shaft extends this far past the prop plane for
 TUBE_OD = 7.0                   # stern tube outside diameter, APPROVED
 SEAL_L = 8.0                    # transom seal (stuffing tube) length, drawn only, ASSUMED
 SEAL_OD = 11.0                  # transom seal outside diameter, drawn only, ASSUMED
-PROP_D = 45.0                   # propeller diameter inside the nozzle, drawn only, ASSUMED
+PROP_D = 45.0                   # propeller diameter inside the nozzle, drawn only, APPROVED (owner, 2026-10-27)
+PROP_D_ALT = 50.0               # study case: larger propeller, A-601 shows the water over the nozzle top with it, drawn only, APPROVED as a study case (owner, 2026-10-27)
+NOZ_OD_ALT = 65.0               # study case: nozzle outside diameter that takes PROP_D_ALT, same axis height PROP_Z, ASSUMED
 PROP_T = 4.0                    # propeller hub plane thickness as drawn, ASSUMED
 # seal at the transom only (APPROVED); no seal inside the hull.
 
@@ -96,13 +100,16 @@ BLADE_VARIANTS = {
                     dir='aft', swing='up', side='center', housing='tower'),   # PENDING (mechanism not approved)
     'reverse': dict(R=380.0, sector_deg=15.0, hinge_x=420.0, hinge_z=6.0, trunk_x0=420.0, trunk_x1=800.0, trunk_w=12.0,
                     dir='fwd', swing='up', side='tunnel', housing='cap'),     # PENDING (pivot midships, blade points forward; servo drives forward against a stop, gravity does not deploy it)
-    'reverse25': dict(R=380.0, sector_deg=25.0, hinge_x=420.0, hinge_z=6.0, trunk_x0=420.0, trunk_x1=800.0, trunk_w=12.0,
-                      dir='fwd', swing='up', side='tunnel', housing='cap'),   # APPROVED (owner chose the reverse 25 deg daggerboard on 2026-10-26): hinge X 420, Z 6, R380, points forward, trunk 12 wide on the tunnel side from the hinge to X 800, bow cap over the stowed tip (CAP_CLR)
+    'reverse25': dict(R=375.0, sector_deg=25.0, hinge_x=420.0, hinge_z=6.0, trunk_x0=420.0, trunk_x1=800.0, trunk_w=12.0,
+                      dir='fwd', swing='up', side='tunnel', housing='cap'),   # APPROVED (owner chose the reverse 25 deg daggerboard on 2026-10-26; R375, was 380, APPROVED owner 2026-10-27 so the stowed tip stops TRUNK_TIP_CLR short of the trunk end): hinge X 420, Z 6, points forward, trunk 12 wide on the tunnel side from the hinge to X 800, bow cap over the stowed tip and the blade servo (CAP_CLR)
 }
 BLADE_VARIANT = 'reverse25'     # default selection, APPROVED (owner chose it on 2026-10-26)
 BLADE_ARC_PTS = 48              # arc resolution for outlines and checks, ASSUMED (numerical setting)
 CAP_CLR = 5.0                   # bow cap top clears the stowed blade by this much, PENDING
-BLADE_BOX = dict(l=50.0, w=40.0, h=41.0)   # blade servo and spool box on the deck at midships (cap variants), X from the hinge; drawn only, ASSUMED
+TRUNK_TIP_CLR = 5.0             # the blade tip (extended or stowed) stops at least this far short of the trunk end it points toward (check 19), APPROVED (owner, 2026-10-27)
+LINE_R = 200.0                  # blade lift line attaches on the blade upper edge this far from the hinge (X 620 for reverse25) and runs straight up through the open trunk to the spool, APPROVED (owner, 2026-10-27)
+BLADE_SERVO = dict(l=40.0, w=40.5, h=20.0)   # blade servo DS3225 (40 x 20 x 40.5) on its side inside the bow cap, outboard of the blade plane: footprint l along X, w along Y, h tall; output shaft STEER_OUT_X from its aft end, at mid-height; mass is BLADE_MECH_MASS, APPROVED (owner, 2026-10-27)
+BLADE_SERVO_BAY = (600.0, 650.0)  # X range in the bow cap reserved for the blade servo and spool, APPROVED (owner, 2026-10-27)
 # sweep: (label, base variant key, overrides). Overrides replace entries of the base dict.
 BLADE_SWEEP = [
     ('trail R400 15 deg hinge 785', 'trail', {}),
@@ -111,11 +118,11 @@ BLADE_SWEEP = [
     ('hang R163', 'hang', dict(R=163.0, trunk_x0=637.0)),
     ('reverse 15 deg R380', 'reverse', {}),
     ('reverse 20 deg R380', 'reverse', dict(sector_deg=20.0)),
-    ('reverse 25 deg R380', 'reverse25', {}),
+    ('reverse 25 deg R375', 'reverse25', {}),
     ('reverse 15 deg R380 hinge 450', 'reverse', dict(hinge_x=450.0, trunk_x0=450.0)),
 ]
 SWEEP_BAT_X = (DESIGN_BAT_X, ALT_BAT_X[0])   # battery positions swept: the design position (475) and the first alternate (520)
-SHEET_ROWS = ('hang R120', 'reverse 15 deg R380', 'reverse 25 deg R380')   # A-004 rows (labels from BLADE_SWEEP)
+SHEET_ROWS = ('hang R120', 'reverse 15 deg R380', 'reverse 25 deg R375')   # A-004 rows (labels from BLADE_SWEEP); A-004 is a study sheet, not in the issued set
 TOWER_L = 94.0                  # tower footprint along X, centered over the trunk, APPROVED (orientation as in v8b)
 TOWER_W = 127.0                 # tower footprint across Y, centered on the centerline, APPROVED (orientation as in v8b)
 TOWER_H = 44.0                  # tower height above the deck, APPROVED
@@ -144,7 +151,7 @@ OTHER_ESTIMATES = [
 ]
 TRUNK_MASS = 28.0               # both trunks, ESTIMATE
 TOWER_MASS = 30.0               # tower shell, ESTIMATE
-BLADE_MECH_MASS = 80.0          # blade servo and spool, ESTIMATE
+BLADE_MECH_MASS = 80.0          # blade servo, spool and line, now carried in the bow cap at the servo center X, ESTIMATE
 
 # ---- steering linkage (ASSUMED unless noted; geometry derives the points) ------------------------
 # One servo on its side on the tunnel roof; its horn turns in a vertical plane, so the pushrod runs fore and aft at height ZR
@@ -183,9 +190,15 @@ BOW_DRAFT_MIN = 20.0            # bow draft, APPROVED
 BUMPER_MARGIN_MIN = 5.0         # a nozzle turned about its post stays inside the aft deck outline by at least this, APPROVED
 BUMPER_TURN_DEG = 90.0          # nozzle turn about its post tested for the bumper check (swept from 0), APPROVED
 
+# ---- slow-speed study (A-401, text only; the motor and cells are the design, the floor fraction is an assumption) -------------------
+MOTOR_KV = 1200.0               # ATO 3670 kV, published
+PACK_V = (('3S', 11.1), ('2S', 7.4))   # nominal pack voltage by cell count (3.7 V per cell), published nominal; 3S is the design battery, 2S is a study case
+FLOOR_FRACTION = 0.08           # lowest steady rpm of a sensorless ESC as a fraction of the no-load rpm, ASSUMED (bench test required)
+
 # ---- numerical settings (not design decisions) -------------------------------------------------
 HYDRO_STRIPS = 3000             # hydrostatic strips
 HULL_STRIPS = 2000              # hull skin mass strips
+FILLET_STRIPS = 400             # strips along the skeg for the skeg root fillet volume
 HYDRO_ITER = 20                 # most deck/weight/waterline fixed-point passes
 HYDRO_TOL = 1e-9                # stop when the stern draft changes less than this (mm)
 D0_GUESS = 35.0                 # first guess, stern draft
@@ -195,6 +208,11 @@ K_GUESS = 0.03                  # first guess, waterline slope
 # ---- schedules: frames, planking, blocking, hatch seal, latches (added with sheets A-000, A-103, A-401 to A-503) ----------
 FRAME_X = (60.0, 150.0, 200.0, 305.0, 390.0, 520.0, 620.0, 706.0, 760.0)   # frame stations X in each sponson and the tunnel (transom and tip closures are extra), ASSUMED
 FRAME_T = SKIN_T                # frame thickness (1/8 in), ASSUMED
+FRAME_KIND = {1: 'solid', 2: 'solid', 3: 'solid_shaft', 9: 'solid_notch'}   # sponson piece of frame n where it is not a ring (key is the frame number): solid panel; solid with the shaft hole; solid with the trunk notch. A bulkhead (BH1, BH2) is solid wherever it falls. APPROVED (owner, 2026-10-27)
+TUNNEL_KIND = {5: 'solid_grommet'}   # tunnel piece of frame n where it is not a ring: solid with one wire grommet hole at the roof plate level. APPROVED (owner, 2026-10-27)
+SEAL_FRAMES = (2, 9)            # solid frames that close a sealed compartment besides BH1 and BH2: F2 closes the stern compartment X 0 to 150 (F1 is a solid frame inside it), F9 closes the bow compartment X 760 to the tip, APPROVED (owner, 2026-10-27)
+SHAFT_HOLE_CLR = 2.0            # clearance added to the stern tube OD for the shaft hole in the solid frame (F3), APPROVED (owner, 2026-10-27)
+WIRE_HOLE_D = 10.0              # wire grommet hole in the solid tunnel piece of F5, sitting on the roof plate, ASSUMED
 FRAME_RIB = 12.7                # ring member width of a frame (bottom, wall, deck members), ASSUMED
 STOCK_W = 76.2                  # balsa sheet stock width (3 in), planks run along the long side of a panel, ASSUMED
 BLOCK_LEG = 9.525               # triangular blocking leg (3/8 in stock ripped on the diagonal, 45 deg, bears on both faces), ASSUMED

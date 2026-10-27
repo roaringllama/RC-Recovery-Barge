@@ -61,6 +61,29 @@ def deck_fn(d0, k):
     return lambda X: d0 - k * X + D.FREEBOARD
 
 
+# ---- rounds: bilge on both bottom corners of each sponson ---------------------------------------------
+def bilge_r(X):
+    """Bilge radius at station X on each bottom corner: BILGE_R, or half the sponson width where the section is narrower than two radii."""
+    return _ret(np.minimum(D.BILGE_R, np.asarray(sponson_width(X), dtype=float) / 2))
+
+
+def round_area(R, h):
+    """Section area (mm2) a rounded corner of radius R removes from a square corner, up to a water height h above the corner line.
+    The corner is fully under water when h >= R, where it is R^2 (1 - pi/4); below that only the part below h counts."""
+    R = np.asarray(R, dtype=float)
+    h = np.clip(np.asarray(h, dtype=float), 0, R)
+    Rs = np.where(R > 0, R, 1)
+    u = Rs - h                                           # height of the cut below the arc center line
+    F = lambda v: (v * np.sqrt(np.maximum(Rs ** 2 - v ** 2, 0)) + Rs ** 2 * np.arcsin(np.clip(v / Rs, -1, 1))) / 2
+    full = Rs ** 2 * math.pi / (2 * 2)
+    return _ret(np.where(R > 0, Rs * h - (full - F(u)), 0))
+
+
+def _hull_z(u, f, Rb):
+    """Hull bottom height at distance u from the sponson centerline: flat out to f, then the bilge arc of radius Rb."""
+    return 0.0 if u <= f else Rb - math.sqrt(max(Rb ** 2 - (u - f) ** 2, 0))
+
+
 # ---- drivetrain --------------------------------------------------------------------------------
 AXIS = math.radians(D.MOTOR_AXIS_DEG)
 TAN = math.tan(AXIS)
@@ -122,7 +145,10 @@ SHOE_BOT = SHOE_TOP - D.SHOE_T
 SHOE_X1 = -(D.NOZ_X0 + D.NOZ_L + D.SHOE_AFT_OVERHANG)
 SKEG_X0 = KEEL_X + D.SKEG_FWD_OF_KEEL
 SKEG = [(SKEG_X0, 0), (0, 0), (0, SHOE_BOT)]         # side plate outline, straight bottom edge
-SHOE = [(0, SHOE_TOP), (SHOE_X1, SHOE_TOP), (SHOE_X1, SHOE_BOT), (0, SHOE_BOT)]
+SHOE_RE = min(D.SKEG_EDGE_R, D.SHOE_T)               # round on the shoe aft-bottom edge (the shoe is only SHOE_T thick)
+SHOE = [(0, SHOE_TOP), (SHOE_X1, SHOE_TOP), (SHOE_X1, SHOE_BOT + SHOE_RE)] + [
+    (SHOE_X1 + SHOE_RE - SHOE_RE * math.cos(math.pi / 2 * i / D.BLADE_ARC_PTS), SHOE_BOT + SHOE_RE - SHOE_RE * math.sin(math.pi / 2 * i / D.BLADE_ARC_PTS))
+    for i in range(D.BLADE_ARC_PTS + 1)] + [(0, SHOE_BOT)]
 SKEG_BOT_DEG = math.degrees(math.atan(-SHOE_BOT / SKEG_X0))
 SKEG_TRI_AREA = SKEG_X0 * (-SHOE_BOT) / 2            # one side plate, mm2
 SHOE_AREA = (-SHOE_X1) * D.SKEG_W                    # plan area of one shoe, mm2
@@ -178,12 +204,114 @@ def nozzle_sweep(turn=None, n=D.BLADE_ARC_PTS):
     return rows
 
 
+SKEG_S = D.SKEG_W / 2                                # skeg half width
+
+
+def skeg_depth(X):
+    """Depth of the skeg below the keel line at station X (zero forward of the skeg)."""
+    return -skeg_bot(X)
+
+
+def skeg_fillet(X):
+    """Skeg root fillet on one side of one skeg at station X, in (u, z) with u the distance from the sponson centerline and z up from the keel.
+    The fillet circle of radius r = min(SKEG_ROOT_R, skeg depth) is tangent to the skeg face (u = SKEG_W/2) and to the hull bottom: the flat keel
+    line, or the bilge arc where the flat is too narrow (the skeg is 22 wide in a sponson that is 25 to 55 wide over its length).
+    Returns dict(r, zc, pts, area) where pts is the closed section of the fillet material, or None where there is no skeg."""
+    d = skeg_depth(X)
+    if X < 0 or X >= SKEG_X0 or d <= 0 or D.SKEG_ROOT_R <= 0:
+        return None
+    r = min(D.SKEG_ROOT_R, d)
+    w = float(sponson_width(X))
+    Rb = float(bilge_r(X))
+    f = w / 2 - Rb                                    # flat half width before the bilge arc
+    uc = SKEG_S + r
+    if uc <= f:
+        zc = -r
+        t2 = (uc, 0.0)
+    else:
+        zc = Rb - math.sqrt((Rb + r) ** 2 - (uc - f) ** 2)
+        dx, dz = uc - f, zc - Rb
+        n = math.hypot(dx, dz)
+        t2 = (f + Rb * dx / n, Rb + Rb * dz / n)
+    a2 = math.atan2(t2[1] - zc, t2[0] - uc)
+    arc = [(uc + r * math.cos(math.pi + (a2 - math.pi) * i / D.BLADE_ARC_PTS), zc + r * math.sin(math.pi + (a2 - math.pi) * i / D.BLADE_ARC_PTS)) for i in range(D.BLADE_ARC_PTS + 1)]
+    back = [(t2[0] + (SKEG_S - t2[0]) * i / D.BLADE_ARC_PTS, _hull_z(t2[0] + (SKEG_S - t2[0]) * i / D.BLADE_ARC_PTS, f, Rb)) for i in range(D.BLADE_ARC_PTS + 1)]
+    pts = [(SKEG_S, _hull_z(SKEG_S, f, Rb))] + arc + back
+    a = abs(sum(p[0] * q[1] - q[0] * p[1] for p, q in zip(pts, pts[1:] + pts[:1]))) / 2
+    return dict(r=r, zc=zc, t2=t2, arc=arc, pts=pts, area=a)
+
+
+def _fillet_integral():
+    """Volume (cm3) of all four skeg root fillets (two skegs, two sides) and its centroid X."""
+    n = D.FILLET_STRIPS
+    dx = SKEG_X0 / n
+    vol, mom = 0.0, 0.0
+    for i in range(n):
+        X = (i + 1 / 2) * dx
+        f_ = skeg_fillet(X)
+        if f_:
+            vol += f_['area'] * dx
+            mom += f_['area'] * dx * X
+    vol *= 2 * 2
+    mom *= 2 * 2
+    return vol / 1000, (mom / vol if vol else 0.0)
+
+
 # buoyant volume of both skegs and shoes (cm3), and its centroid X
 SKEG_VOL_TRI = 2 * SKEG_TRI_AREA * D.SKEG_W / 1000
 SKEG_VOL_SHOE = 2 * SHOE_AREA * D.SHOE_T / 1000
-SKEG_VOL = SKEG_VOL_TRI + SKEG_VOL_SHOE
-SKEG_BUOY_X = (SKEG_VOL_TRI * SKEG_X0 * _THIRD + SKEG_VOL_SHOE * SHOE_X1 / 2) / SKEG_VOL
+SKEG_VOL_BASE = SKEG_VOL_TRI + SKEG_VOL_SHOE
+SKEG_BUOY_X_BASE = (SKEG_VOL_TRI * SKEG_X0 * _THIRD + SKEG_VOL_SHOE * SHOE_X1 / 2) / SKEG_VOL_BASE
+SKEG_VOL_FILLET, SKEG_FILLET_X = _fillet_integral()  # the root fillets add buoyancy (both sides of both skegs)
+SKEG_VOL = SKEG_VOL_BASE + SKEG_VOL_FILLET
+SKEG_BUOY_X = (SKEG_VOL_BASE * SKEG_BUOY_X_BASE + SKEG_VOL_FILLET * SKEG_FILLET_X) / SKEG_VOL
 SKEG_INTERIOR = D.SKEG_W - 2 * D.SKIN_T              # inside width after two skins
+# skeg bottom edge (slope) and shoe outer bottom edges (two sides and the aft end), both skegs: length and the volume the R SKEG_EDGE_R rounds would remove
+_SKEG_EDGE_L = 2 * math.hypot(SKEG_X0, -SHOE_BOT) + 2 * (-SHOE_X1) + D.SKEG_W
+SKEG_EDGE_VOL = 2 * _SKEG_EDGE_L * D.SKEG_EDGE_R ** 2 * (1 - math.pi / (2 * 2)) / 1000   # reported only, not subtracted in the hydrostatics
+
+
+def sponson_section(X, D_):
+    """Closed outline [(y, z)] of the port sponson section at station X, with the deck at height D_: both bilge rounds, and where the
+    skeg is under the section its box with the bottom edge rounds and the root fillets. Mirror y for starboard."""
+    yi, yo = float(inner_wall_y(X)), float(outer_wall_y(X))
+    w = yo - yi
+    yc = (yi + yo) / 2
+    Rb = float(bilge_r(X))
+    f = w / 2 - Rb
+    n = D.BLADE_ARC_PTS
+    half = []                                          # right half of the bottom, from the sponson centerline outward: (u, z)
+    fl = skeg_fillet(X)
+    if fl:
+        zb = -skeg_depth(X)
+        re = min(D.SKEG_EDGE_R, skeg_depth(X), SKEG_S)
+        half.append((0.0, zb))
+        half += [(SKEG_S - re + re * math.sin(math.pi / 2 * i / n), zb + re - re * math.cos(math.pi / 2 * i / n)) for i in range(n + 1)]
+        half += [(u_, z_) for u_, z_ in fl['arc']]
+        t2u = fl['t2'][0]
+    else:
+        half.append((0.0, 0.0))
+        t2u = 0.0
+    if t2u < f:
+        half.append((f, 0.0))
+    half += [(f + Rb * math.sin(math.pi / 2 * i / n), Rb - Rb * math.cos(math.pi / 2 * i / n)) for i in range(n + 1) if f + Rb * math.sin(math.pi / 2 * i / n) > t2u]
+    left = [(-u_, z_) for u_, z_ in reversed(half[1:])]
+    bottom = left + half
+    return [(yi, D_)] + [(yc + u_, z_) for u_, z_ in bottom] + [(yo, D_)]
+
+
+def hull_section(X, D_, t=0.0):
+    """Outline [(y, z)] of the port sponson hull section at station X without the skeg, offset inward by t (t = SKIN_T gives the inside of the skin):
+    both bilge corners rounded (radius less t, not below zero), floor at z = t, deck at D_ - t."""
+    yi, yo = float(inner_wall_y(X)) + t, float(outer_wall_y(X)) - t
+    Rb = max(float(bilge_r(X)) - t, 0.0)
+    n = D.BLADE_ARC_PTS
+    pts = [(yi, D_ - t)]
+    pts += [(yi + Rb - Rb * math.cos(math.pi / 2 * i / n), t + Rb - Rb * math.sin(math.pi / 2 * i / n)) for i in range(n + 1)]
+    pts += [(yo - Rb + Rb * math.sin(math.pi / 2 * i / n), t + Rb - Rb * math.cos(math.pi / 2 * i / n)) for i in range(n + 1)]
+    pts += [(yo, D_ - t)]
+    return pts
+
 
 # ---- blades ------------------------------------------------------------------------------------
 # A blade is a function of (hinge X, hinge Z, radius, sector, direction, swing). `variant` is a key of
@@ -285,10 +413,63 @@ def stowed_above(zd, variant=None):
     return out
 
 
+def blade_top_at(X, extended=False, variant=None):
+    """Highest Z of the blade outline at station X (the upper edge of the blade seen in profile), or None outside it."""
+    pts = blade_outline(extended, variant)
+    zs = []
+    for i, p in enumerate(pts):
+        q = pts[(i + 1) % len(pts)]
+        if (p[0] - X) * (q[0] - X) <= 0 and p[0] != q[0]:
+            zs.append(p[1] + (q[1] - p[1]) * (X - p[0]) / (q[0] - p[0]))
+        elif p[0] == q[0] == X:
+            zs += [p[1], q[1]]
+    return max(zs) if zs else None
+
+
+def line_x(variant=None):
+    """X of the blade lift line: LINE_R from the hinge along the keel line (forward or aft per `dir`)."""
+    b = blade_params(variant)
+    return b['hinge_x'] + _dir(b) * D.LINE_R
+
+
+def line_attach(extended=True, variant=None):
+    """Where the lift line meets the blade upper edge, LINE_R from the hinge: (X, Z). Extended the upper edge lies along the keel line;
+    stowed it is rotated up with the blade."""
+    b = blade_params(variant)
+    a = math.radians(b['sector_deg'])
+    t = 0 if extended else (-a if b['swing'] == 'up' else a)
+    return b['hinge_x'] + _dir(b) * D.LINE_R * math.cos(t), b['hinge_z'] - D.LINE_R * math.sin(t)
+
+
+def blade_servo_box(zd, variant=None):
+    """Blade servo in the bow cap (cap variants), port side, as a Box; None for a tower variant.
+    X: the output shaft (the spool) is at the line X and STEER_OUT_X from the servo aft end. Y: outboard of the trunk outer wall, so
+    outboard of the blade plane. Z: its base sits above the stowed blade upper edge and the deck top over its footprint (a shelf in the cap)."""
+    b = blade_params(variant)
+    if b['housing'] != 'cap':
+        return None
+    sv = D.BLADE_SERVO
+    x0 = line_x(variant) - D.STEER_OUT_X
+    x1 = x0 + sv['l']
+    xs_ = [x0 + (x1 - x0) * i / D.BLADE_ARC_PTS for i in range(D.BLADE_ARC_PTS + 1)]
+    z0 = max([zd(x) for x in xs_] + [z for z in (blade_top_at(x, False, variant) for x in xs_) if z is not None])
+    y0 = trunk_y(variant)[1]
+    return Box(x0, x1, y0, y0 + sv['w'], z0, z0 + sv['h'])
+
+
+def spool_pos(zd, variant=None):
+    """Spool center (X, Z) on the blade servo output shaft, at servo mid-height; Y is the blade plane."""
+    sb = blade_servo_box(zd, variant)
+    if sb is None:
+        return None
+    return line_x(variant), (sb.z0 + sb.z1) / 2
+
+
 def housing(zd, variant=None):
     """What covers the stowed blade above the deck. Returns dict(kind, x0, x1, xc, top(X) -> Z, h0, h1) or None.
     tower: fixed footprint centered over the trunk. cap: X range where the stowed blade is above the deck underside,
-    full sponson width, flat top CAP_CLR above the stowed blade. h0, h1: height above the deck top at x0 and x1."""
+    full sponson width, flat top CAP_CLR above the higher of the stowed blade and the blade servo.
+    h0, h1: height above the deck top at x0 and x1."""
     b = blade_params(variant)
     if b['housing'] == 'tower':
         x0, x1 = tower_x(variant)
@@ -298,20 +479,25 @@ def housing(zd, variant=None):
     if not pts:
         return None
     x0, x1 = min(p[0] for p in pts), max(p[0] for p in pts)
-    ztop = max(p[1] for p in pts) + D.CAP_CLR
-    return dict(kind='cap', x0=x0, x1=x1, xc=(x0 + x1) / 2, top=lambda X: ztop, ztop=ztop, h0=ztop - zd(x0), h1=ztop - zd(x1))
+    z_blade = max(p[1] for p in pts)
+    sb = blade_servo_box(zd, variant)
+    z_servo = sb.z1 if sb else z_blade
+    ztop = max(z_blade, z_servo) + D.CAP_CLR
+    return dict(kind='cap', x0=x0, x1=x1, xc=(x0 + x1) / 2, top=lambda X: ztop, ztop=ztop, h0=ztop - zd(x0), h1=ztop - zd(x1),
+                z_blade=z_blade, z_servo=z_servo, governs='servo' if z_servo > z_blade else 'stowed blade')
+
+
+def tip_to_trunk_end(variant=None):
+    """Clearance from the blade tip (extended or stowed, whichever reaches further) to the trunk end it points toward."""
+    b = blade_params(variant)
+    x0, x1 = blade_xrange(variant)
+    t0, t1 = trunk_x(variant)
+    return (t1 - x1) if _dir(b) > 0 else (x0 - t0)
 
 
 def stowed_tip_height(zd, variant=None):
     """Highest the stowed blade stands above the deck top (negative: below the deck top)."""
     return max(p[1] - zd(p[0]) for p in blade_outline(False, variant))
-
-
-def blade_box(variant=None):
-    """Blade servo and spool box on the deck at the hinge (cap variants): Box with Z from 0 (set on the deck by the caller)."""
-    b = blade_params(variant)
-    bb = D.BLADE_BOX
-    return Box(b['hinge_x'], b['hinge_x'] + bb['l'], -bb['w'] / 2, bb['w'] / 2, 0, bb['h'])
 
 
 def tower_x(variant=None):

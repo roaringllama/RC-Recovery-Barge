@@ -38,7 +38,7 @@ PARTS = [
        'https://www.ebay.de/itm/334698838029', 'One servo drives both nozzles through a tie bar. Published spec: IP66, 25 kg-cm at 6.8 V. IP66 is not immersion rated.'),
     _p('servo_blade', 'Radio', 'Servo, daggerboard (second servo of the pack)', 'DS3225MG', 'Second servo of the 2-pack above; drives the spool and line of the reverse 25 deg blade', 1, 'each', 0.0, 'USD',
        D.STEER_SERVO['mass'], 'Published', 'Its mass is inside the 80 g blade mechanism item of the weight model, not counted twice there.', 'eBay US (rcexpress, Frisco TX)',
-       'https://www.ebay.de/itm/334698838029', 'Included in the pack price above. Sits in the deck box at the hinge, above the deck.'),
+       'https://www.ebay.de/itm/334698838029', 'Included in the pack price above. Sits in the bow cap, on a shelf above the stowed blade, with the spool over the line.'),
     _p('pushrod', 'Radio', 'Pushrods', 'DUB172', 'Du-Bro 2-56 x 12 in threaded rod', 2, 'each', 0.89, 'USD', None, 'Not published', '', 'Motion RC',
        'https://www.motionrc.com/collections/pushrods/products/du-bro-2-56-305mm-12-threaded-rod-dub172',
        'Nozzle linkage only; the blade servo uses a line, not a rod. Clevises not included. The pushrod route is not designed.'),

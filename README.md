@@ -24,8 +24,9 @@ Axes: X from the transom forward, Z up from the keel, Y to port from the centerl
 | `model/weights.py` | Weight and balance item list (group, name, mass g, X mm), total and LCG |
 | `model/hydro.py` | Hydrostatic solve: 3000 strips, stern draft and trim, skeg buoyancy fixed, deck parallel to the waterline |
 | `model/checks.py` | Interference and fit checks, each returns (name, pass, message) |
+| `model/study.py` | Prop and nozzle study: `alternate()` runs the whole model again with `PROP_D_ALT` and `NOZ_OD_ALT` |
 | `model/variants.py` | Blade variant override: `use(key_or_dict, overrides)` context for any blade parameters, and the sweep |
-| `sheets/` | SVG sheet library (`lib.py`, `tbl.py`, `render.py`) and the twelve sheets `a000.py` (cover), `a101.py`, `a103.py`, `a104.py`, `a301.py`, `a401.py`, `a501.py`, `a502.py`, `a503.py`, `a601.py`, `a004.py` (and `wtbl.py`, the schedule table helper) |
+| `sheets/` | SVG sheet library (`lib.py`, `tbl.py`, `render.py`) and the eleven sheets of the set `a000.py` (cover, two pages), `a101.py`, `a103.py`, `a104.py`, `a301.py`, `a401.py`, `a501.py`, `a502.py`, `a503.py`, `a601.py` (and `wtbl.py`, the schedule table helper). `a004.py` (blade sweep study) is a study sheet that is not in the set: `build.py` does not build it and A-000 does not list it; the file is kept |
 | `model/parts.py`, `model/references.py`, `model/schedules.py` | Parts table (vendor data, published prices and masses), references, and the computed schedules (panels, sealing, joints, frames, hatches) |
 | `tools/build_list.py` | Writes the build list workbook |
 | `build.py` | Runs everything |
@@ -43,7 +44,7 @@ Requires Python 3 with numpy, scipy, Pillow, Playwright (Chromium already instal
 
 `build.py` prints the checks report and continues even when checks fail. It writes to `out/`:
 
-- `RC_Recovery_Cat_Drawings_<REV>.pdf` (REV is `design.REV`, now v9.1) and `p1.png` to `p12.png` (A-000, A-101, A-103, A-104, A-301, A-401, A-501, A-502, A-503, A-601, A-004; the cover is two pages). Every sheet title block carries `design.REV`.
+- `RC_Recovery_Cat_Drawings_<REV>.pdf` (REV is `design.REV`, now v9.2) and `p1.png` to `p11.png` (A-000 twice, A-101, A-103, A-104, A-301, A-401, A-501, A-502, A-503, A-601). Every sheet title block carries `design.REV`.
 - `RC_Recovery_Cat_Build_List_v6.xlsx`, the build list workbook (parts with live formulas, channel plan, cooling plan, references)
 - `blade_sweep.csv`, the blade variant sweep at the design battery position (475) and the first alternate (520)
 - `checks.txt`, the checks report
@@ -55,6 +56,10 @@ The battery design position is 475 (APPROVED); the deck is built parallel to the
 
 Checks 15 to 18 (v9.1): 15 hatch flanges against the part of the blade trunk that is open through the deck; 16 every item lifts out through its hatch (plan footprint inside the opening; the battery is tested at its service position `BAT_SERVICE_X`, 505, where it is slid before lift-out, and the report gives the slide range it must be moved from); 17 a nozzle turned about its post, swept 0 to 90 deg, stays inside the aft deck outline by at least 5 mm; 18 the nozzle post length required (about 95 mm), cut from 3 mm rod and 3 mm bore tube stock (300 mm). A failing check is reported, never tuned away.
 
+Checks 19 to 21 (v9.2): 19 the blade tip, extended or stowed, stays `TRUNK_TIP_CLR` (5) short of the trunk end; 20 the blade servo (DS3225 on its side, 40 x 20 x 40.5) fits in the bow cap and the servo bay X 600 to 650, outboard of the blade plane, with the lift line (`LINE_R` 200 from the hinge) straight up the open trunk to the spool; 21 the solid frames and the cap ribs clear the equipment. Check 21 currently fails and is reported (the F5 tunnel piece against the receiver and hatch HC, the F7 cap rib against the servo and the line).
+
+Rounded underwater edges (v9.2): `BILGE_R` 15 (PENDING) on both bottom corners of each sponson, `SKEG_ROOT_R` 8 and `SKEG_EDGE_R` 6 (ASSUMED). The hydrostatics subtract the four corner rounds from the waterplane strip and add the root fillet volume to the skeg buoyancy; the edge rounds are drawn and their volume is reported, not subtracted. A-601 shows the draft change. Frames are solid at F1, F2, F3 (shaft hole), F9 (trunk notch) and the F5 tunnel piece (grommet hole); F4, F6 and F7 keep their openings (`FRAME_KIND`, `TUNNEL_KIND`). The slow-speed study on A-401 is text only and computed from `MOTOR_KV`, `PACK_V` and `FLOOR_FRACTION`.
+
 The steering linkage (pushrod at Z = ZR, tie bar between the posts, nozzle horns, transom hole and bellows, bottom pintle and bushing) is modeled from the ASSUMED constants in `design.py`; the drive shaft length is derived in `model/geometry.py` from the joint, the prop, the motor face, a stub and a margin.
 
 Items with no published weight (nozzles, props, bought motor mounts, water fittings, ball links, bellows) are listed under the total and are not in it, so the total is a floor.
@@ -65,8 +70,8 @@ Items with no published weight (nozzles, props, bought motor mounts, water fitti
 
 - `trail`: R400, 15 deg, hinge X 785, points aft
 - `hang`: R120, 90 deg, hinge X 800, points aft
-- `reverse`: R380, 15 deg, hinge X 420, points forward, trunk 12 wide against the tunnel wall from the hinge to X 800, bow cap over where the stowed blade is above the deck underside, servo and spool in a deck box at the hinge. The servo drives it forward against a stop; gravity does not deploy it.
-- `reverse25`: the same with a 25 deg sector (the design default). The blade plane is on the tunnel side of each sponson, so the batteries sit `BAT_Y_OFFSET` (5 mm, PENDING) outboard of the sponson centerline to clear the trunk.
+- `reverse`: R380, 15 deg, hinge X 420, points forward, trunk 12 wide against the tunnel wall from the hinge to X 800, bow cap over where the stowed blade is above the deck underside, servo and spool in the bow cap with the line lifting the blade to stow; gravity deploys it.
+- `reverse25`: R375 with a 25 deg sector (the design default; the tip stops 5 mm short of the trunk end). The blade plane is on the tunnel side of each sponson, so the batteries sit `BAT_Y_OFFSET` (5 mm, PENDING) outboard of the sponson centerline to clear the trunk.
 
 To run any other blade without editing a file:
 

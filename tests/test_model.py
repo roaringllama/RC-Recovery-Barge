@@ -85,7 +85,7 @@ def test_check_functions_individually(r):
 
 def test_no_numeric_literals_outside_design():
     allowed = {0, 1, 2, 1000}
-    files = ['build.py'] + [os.path.join('model', f) for f in ('geometry.py', 'weights.py', 'hydro.py', 'checks.py', 'variants.py', 'schedules.py')]
+    files = ['build.py'] + [os.path.join('model', f) for f in ('geometry.py', 'weights.py', 'hydro.py', 'checks.py', 'variants.py', 'schedules.py', 'study.py')]
     bad = []
     for f in files:
         tree = ast.parse(open(os.path.join(ROOT, f)).read())
@@ -156,12 +156,12 @@ def test_reverse_housing_is_a_bow_cap_over_the_stowed_blade():
         assert h['kind'] == 'cap'
         pts = G.stowed_above(zd)
         assert abs(h['x0'] - min(p[0] for p in pts)) < 1e-9 and abs(h['x1'] - max(p[0] for p in pts)) < 1e-9
-        assert abs(h['ztop'] - (max(p[1] for p in G.blade_outline(False)) + D.CAP_CLR)) < 1e-9
+        assert abs(h['ztop'] - (max(max(p[1] for p in G.blade_outline(False)), G.blade_servo_box(zd).z1) + D.CAP_CLR)) < 1e-9
         # at the cap edges the stowed blade crosses the deck underside
         for x in (h['x0'], h['x1']):
             assert min(abs(p[1] - (zd(p[0]) - D.SKIN_T)) for p in pts if abs(p[0] - x) < 1e-9) < 1e-6
         names = [n for _, n, _, _ in rr['items']]
-        assert any('Bow cap' in n for n in names) and any('deck box' in n for n in names)
+        assert any('Bow cap' in n for n in names) and any('in the bow cap' in n for n in names)
         blades = sum(m for g, _, m, _ in rr['items'] if g == 'Blades')
         per = G.blade_area() * D.SKIN_T * D.BALSA_RHO / 1000 + 2 * G.blade_area() / 1e6 * D.GLASS_OUT
         assert abs(blades - (2 * per + D.TRUNK_MASS + D.TOWER_MASS + D.BLADE_MECH_MASS)) < 1e-9
@@ -174,7 +174,7 @@ def test_sweep_runs_every_variant_at_both_battery_positions():
     assert len(rows) == len(D.BLADE_SWEEP) * len(D.SWEEP_BAT_X)
     assert {r['battery_x'] for r in rows} == set(D.SWEEP_BAT_X)
     assert D.BLADE_VARIANT == 'reverse25'
-    row = [r for r in rows if r['variant'] == 'reverse 25 deg R380' and r['battery_x'] == D.DESIGN_BAT_X][0]
+    row = [r for r in rows if r['variant'] == 'reverse 25 deg R375' and r['battery_x'] == D.DESIGN_BAT_X][0]
     assert abs(row['total_g'] - hydro.design()['W']) < 1e-9
     hang = [r for r in rows if r['variant'] == 'hang R120' and r['battery_x'] == D.DESIGN_BAT_X][0]
     with variants.use('hang'):
@@ -186,13 +186,13 @@ def test_sweep_runs_every_variant_at_both_battery_positions():
 def test_default_blade_is_reverse25():
     b = D.BLADE_VARIANTS[D.BLADE_VARIANT]
     assert D.BLADE_VARIANT == 'reverse25'
-    assert (b['hinge_x'], b['hinge_z'], b['R'], b['sector_deg']) == (420.0, 6.0, 380.0, 25.0)
+    assert (b['hinge_x'], b['hinge_z'], b['R'], b['sector_deg']) == (420.0, 6.0, 375.0, 25.0)
     assert b['dir'] == 'fwd' and b['side'] == 'tunnel' and b['housing'] == 'cap'
     assert (b['trunk_x0'], b['trunk_x1'], b['trunk_w']) == (420.0, 800.0, 12.0)
     ext, ret = G.blade_outline(True), G.blade_outline(False)
-    assert abs(ext[1][0] - 800.0) < 1e-9 and abs(ext[1][1] - 6.0) < 1e-9
-    assert abs(G.blade_depth() - (380.0 * math.sin(math.radians(25.0)) - 6.0)) < 1e-9
-    assert abs(max(p[1] for p in ret) - (6.0 + 380.0 * math.sin(math.radians(25.0)))) < 1e-9
+    assert abs(ext[1][0] - (800.0 - D.TRUNK_TIP_CLR)) < 1e-9 and abs(ext[1][1] - 6.0) < 1e-9
+    assert abs(G.blade_depth() - (375.0 * math.sin(math.radians(25.0)) - 6.0)) < 1e-9
+    assert abs(max(p[1] for p in ret) - (6.0 + 375.0 * math.sin(math.radians(25.0)))) < 1e-9
 
 
 def test_reverse25_blade_plane_and_trunk_on_the_tunnel_side():
@@ -205,7 +205,7 @@ def test_reverse25_blade_plane_and_trunk_on_the_tunnel_side():
 
 def test_reverse25_cap_over_the_stowed_tip(r):
     h = G.housing(r['deck'])
-    tip = 6.0 + 380.0 * math.sin(math.radians(25.0))
+    tip = 6.0 + 375.0 * math.sin(math.radians(25.0))
     assert h['kind'] == 'cap' and abs(h['ztop'] - (tip + D.CAP_CLR)) < 1e-9
     assert h['h0'] > 0 and h['h1'] > 0
     assert 0 < h['x0'] < h['x1'] <= D.LOA
@@ -241,16 +241,17 @@ def test_battery_offset_outboard_clears_the_trunk():
 
 
 def test_known_check_state(r):
-    """Current results: every check passes at the 504 service position."""
+    """Current results: every check passes except 21, the three owner-review conflicts reported on A-502 (F5 tunnel piece, F7 rib)."""
     res = {n.split()[0]: ok for n, ok, _ in checks.run_all(r)}
-    assert {k for k, ok in res.items() if not ok} == set()
+    assert {k for k, ok in res.items() if not ok} == {'21'}
+    assert len(res) == 22 and res['19'] and res['20']
     assert res['6'] and res['15'] and res['17'] and res['18'] and res['13'] and res['9'] and res['9b'] and res['3'] and res['11']
 
 
 # ---- v9.1: design position 475, hatches HB and HC, linkage, shaft, density, checks 15 to 18 ---------------------
 
 def test_revision_and_design_position():
-    assert D.REV == 'v9.1'
+    assert D.REV == 'v9.2'
     assert D.DESIGN_BAT_X == 475.0 and D.BAT_SLIDE == (475.0, 590.0) and D.ALT_BAT_X == (520.0, 590.0)
     assert D.SWEEP_BAT_X == (475.0, 520.0)
     assert hydro.design()['bat_x'] == 475.0
@@ -343,17 +344,17 @@ def test_check_6_evaluates_at_the_design_position(r):
     name, ok, msg = checks.c6(r)
     assert ok == (r['over'] - D.TROUGH >= D.TROUGH_MARGIN_MIN) and 'batteries at 475' in msg and checks.level(name, ok) == 'PASS'
     with variants.use('reverse25'):
-        alt = hydro.at(520.0, hydro.design())
+        alt = hydro.at(590.0, hydro.design())
     nm, ok2, _ = checks.c6(alt)
-    assert not ok2 and checks.level(nm, ok2) == 'WARN'            # still a warning at 520, not a failure
+    assert not ok2 and checks.level(nm, ok2) == 'WARN'            # still a warning at 590, not a failure
 
 
 def test_check_15_only_tests_the_open_part_of_the_trunk(r, monkeypatch):
     zd = r['deck']
     above = G.stowed_above(zd)
     open_x0 = min(p[0] for p in above)
-    assert checks.c15(r)[1] and '(0.5 clear in X)' in checks.c15(r)[2]          # HB x1 582 plus the 6 flange is 588, the open trunk starts at 588.5
-    monkeypatch.setitem(D.HATCHES, 'HB', dict(D.HATCHES['HB'], x1=585.0))        # the old x1: the flange reaches 2.5 into the open part
+    assert checks.c15(r)[1] and '(5.1 clear in X)' in checks.c15(r)[2]          # HB x1 582 plus the 6 flange is 588, the open trunk starts at 593.1
+    monkeypatch.setitem(D.HATCHES, 'HB', dict(D.HATCHES['HB'], x1=open_x0 - D.FLANGE + 2.5))        # the flange reaches 2.5 into the open part
     assert checks.c15(r)[1] is False and 'open trunk by 2.5 in X' in checks.c15(r)[2]
     monkeypatch.setitem(D.HATCHES, 'HB', dict(D.HATCHES['HB'], x1=open_x0 - D.FLANGE - 0.5))
     assert checks.c15(r)[1]
@@ -405,8 +406,8 @@ def test_every_sheet_carries_the_revision(r):
     alts = [hydro.at(x, r) for x in D.ALT_BAT_X]
     results = checks.run_all(r)
     for sh in (a101.build(r, alts), a104.build(r), a301.build(r, alts), a601.build(r, alts, results), a004.build(rows)):
-        assert sh.rev == D.REV == 'v9.1'
-        assert 'v9.1, issued for review' in sh.svg()
+        assert sh.rev == D.REV == 'v9.2'
+        assert 'v9.2, issued for review' in sh.svg()
     svg = a601.build(r, alts, results).svg()
     assert '0.160 g/cm3 (10 lb/ft3)' in svg and 'DENSITY SENSITIVITY' in svg
     assert 'Pushrod, 2-56 rod' in a101.build(r, alts).svg()
@@ -445,3 +446,66 @@ def test_build_list_writes_workbook(tmp_path, r):
     for ws in wb:
         for row in ws.iter_rows(values_only=True):
             assert not any(isinstance(v, str) and (chr(0x2014) in v or chr(0x2013) in v) for v in row)
+
+
+# ---- v9.2 owner review ---------------------------------------------------------------------------------------
+
+def test_v92_constants():
+    assert D.PROP_D == 45.0 and D.PROP_D_ALT == 50.0 and D.NOZ_OD == 60.0 and D.NOZ_L == 60.0 and D.NOZ_OD_ALT == 65.0
+    assert D.BILGE_R == 15.0 and D.SKEG_ROOT_R == 8.0 and D.SKEG_EDGE_R == 6.0
+    assert D.TRUNK_TIP_CLR == 5.0 and D.LINE_R == 200.0 and D.BLADE_SERVO_BAY == (600.0, 650.0)
+    assert (D.BLADE_SERVO['l'], D.BLADE_SERVO['w'], D.BLADE_SERVO['h']) == (40.0, 40.5, 20.0)
+    assert not hasattr(D, 'BLADE_BOX')
+    assert D.MOTOR_KV == 1200.0 and D.FLOOR_FRACTION == 0.08 and dict(D.PACK_V) == {'3S': 11.1, '2S': 7.4}
+    assert D.WIRE_HOLE_D == 10.0 and D.FRAME_KIND == {1: 'solid', 2: 'solid', 3: 'solid_shaft', 9: 'solid_notch'}
+    assert D.TUNNEL_KIND == {5: 'solid_grommet'}
+
+
+def test_tip_clearance_and_servo_in_the_cap(r):
+    assert abs(G.tip_to_trunk_end() - D.TRUNK_TIP_CLR) < 1e-9
+    zd = r['deck']
+    sb = G.blade_servo_box(zd)
+    assert abs((sb.z1 - sb.z0) - 20.0) < 1e-9 and abs((sb.x1 - sb.x0) - 40.0) < 1e-9 and abs((sb.y1 - sb.y0) - 40.5) < 1e-9
+    assert D.BLADE_SERVO_BAY[0] <= sb.x0 and sb.x1 <= D.BLADE_SERVO_BAY[1]
+    assert sb.y0 >= G.trunk_y()[1]
+    h = G.housing(zd)
+    assert abs(h['ztop'] - (max(h['z_blade'], sb.z1) + D.CAP_CLR)) < 1e-9
+    res = {n.split()[0]: ok for n, ok, _ in checks.run_all(r)}
+    assert res['19'] and res['20'] and not res['21']
+
+
+def test_rounds_reduce_waterplane_and_raise_draft(r):
+    assert abs(G.round_area(D.BILGE_R, D.BILGE_R) - D.BILGE_R ** 2 * (1 - math.pi / 4)) < 1e-9
+    assert G.round_area(D.BILGE_R, 0.0) == 0.0
+    sq = hydro.design(rounds=False)
+    assert r['d0'] > sq['d0'] and abs(r['W'] - sq['W']) < 10.0     # no weight change by the rounds; only the deck skin follows the deeper draft
+    e = hydro.round_effect(r)
+    assert e['d0'] > 0 and e['bow'] > 0
+    assert G.SKEG_VOL > G.SKEG_VOL_BASE and G.SKEG_VOL_FILLET > 0
+
+
+def test_frames_and_compartments(r):
+    from model import schedules as S
+    kinds = [f['kind'] for f in S.frames(r['deck'])]
+    assert kinds[0] == 'solid' and kinds[1] == 'solid' and kinds[2] == 'solid_shaft' and kinds[8] == 'solid_notch'
+    assert all(k == 'ring' for i, k in enumerate(kinds) if i + 1 in (4, 6, 7))
+
+
+def test_study_alternate_restores_state(r):
+    from model import study
+    before = (D.PROP_D, D.NOZ_OD, hydro.design()['d0'])
+    rows = study.rows(r, checks.run_all(r))
+    assert (D.PROP_D, D.NOZ_OD, hydro.design()['d0']) == before
+    assert len(rows) == 2
+
+
+def test_slow_speed_numbers():
+    from model import schedules as S
+    t = repr(S.slow_speed())
+    assert '13320' in t.replace(',', '') and '8880' in t.replace(',', '')
+
+
+def test_a004_is_not_in_the_set():
+    src = open(os.path.join(ROOT, 'build.py')).read()
+    assert 'a004' not in src
+    assert os.path.exists(os.path.join(ROOT, 'sheets', 'a004.py'))

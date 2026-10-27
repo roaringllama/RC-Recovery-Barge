@@ -11,6 +11,12 @@ BF = 'style="fill:#f1e3c8"'
 
 def _short(f):
     n = []
+    if f['kind'] in ('solid', 'solid_shaft', 'solid_notch'):
+        n.append({'solid': 'solid', 'solid_shaft': 'solid, shaft hole %.1f' % (f['hole']['d'] if f['hole'] else 0), 'solid_notch': 'solid, trunk notch %.1f' % (f['notch_w'] or 0)}[f['kind']])
+    if f['hole'] and f['hole']['notch']:
+        n.append('hole center %.2f above the bottom edge: opens as a notch' % f['hole']['z'])
+    if f['tunnel_kind'] == 'solid_grommet':
+        n.append('tunnel piece solid, grommet hole %.0f on the roof plate' % f['grommet']['d'])
     if f['bulkhead']:
         n.append('bulkhead BH')
     for x in D.DECK_BEAMS:
@@ -81,6 +87,10 @@ def build(r=None):
     if hz and hz['kind'] == 'cap':
         sh.rect(xs(hz['x1']), ys(float(G.outer_wall_y(hz['x0']))), (hz['x1'] - hz['x0']) * s, (float(G.outer_wall_y(hz['x0'])) - float(G.inner_wall_y(hz['x0']))) * s, 'hid')
         sh.text(xs((hz['x0'] + hz['x1']) / 2), ys(float(G.inner_wall_y(hz['x0']))) + 3.6, 'bow cap X %.0f to %.0f' % (hz['x0'], hz['x1']), 'ts', 'middle')
+        sb_ = G.blade_servo_box(zd)
+        if sb_:
+            sh.rect(xs(sb_.x1), ys(sb_.y1), (sb_.x1 - sb_.x0) * s, (sb_.y1 - sb_.y0) * s, 'elec')
+            sh.text(xs((sb_.x0 + sb_.x1) / 2), ys((sb_.y0 + sb_.y1) / 2) + 0.8, 'BV', 'ts', 'middle')
     sv = G.steer_servo_box()
     sp = D.PAD_MARGIN
     sh.rect(xs(sv.x1 + sp), ys(sv.y1 + sp), (sv.x1 - sv.x0 + 2 * sp) * s, (sv.y1 - sv.y0 + 2 * sp) * s, 'thin')
@@ -93,8 +103,13 @@ def build(r=None):
     for f in fr:
         w, h = f['w_in'] * s3, f['h'] * s3
         sh.rect(fx, base - h, w, h, 'cut')
-        if f['open_w'] > 0 and not f['bulkhead']:
+        if not f['solid'] and not f['bulkhead'] and f['open_w'] > 0:
             sh.rect(fx + D.FRAME_RIB * s3, base - h + D.FRAME_RIB * s3, f['open_w'] * s3, f['open_h'] * s3, 'obj', 'style="fill:#fff"')
+        if f['kind'] == 'solid_notch' and f['notch_w']:
+            sh.rect(fx, base - h, f['notch_w'] * s3, h, 'obj', 'style="fill:#fff"')               # full height trunk notch on the tunnel side
+        if f['hole']:
+            hx = fx + (G.YS - float(G.inner_wall_y(f['x'])) - T) * s3
+            sh.circ(hx, base - f['hole']['z'] * s3, f['hole']['d'] / 2 * s3, 'obj', 'style="fill:#fff"')
         if f['clash'] and 'battery slide' in f['clash']:
             bz0 = T + D.BAT['rail']
             by = (G.BAT_YC - float(G.inner_wall_y(f['x'])) - T) - D.BAT['w'] / 2
@@ -102,15 +117,22 @@ def build(r=None):
         sh.text(fx + w / 2, base + 3.6, f['mark'], 'tb', 'middle')
         sh.text(fx + w / 2, base + 6.8, 'X %.0f' % f['x'], 'ts', 'middle')
         sh.text(fx + w / 2, base + 10, '%.1f x %.1f' % (f['w_in'], f['h']), 'ts', 'middle')
-        if f['bulkhead']:
-            sh.text(fx + w / 2, base + 13.2, 'BH solid', 'ts', 'middle')
+        lab = {'ring': '', 'solid': 'solid', 'solid_shaft': 'solid, shaft hole', 'solid_notch': 'solid, trunk notch', 'bulkhead': 'BH solid'}[f['kind']]
+        if lab:
+            sh.text(fx + w / 2, base + 13.2, lab, 'ts', 'middle')
         fx += 23
     tf = fr[len(fr) // 2]
-    sh.text(fx + 2, 96, 'TUNNEL FRAME (at %s), 1:3' % tf['mark'], 'tb') if False else None
-    sh.rect(fx + 3, base - tf['tun_h'] * s3, tf['tun_w'] * s3, tf['tun_h'] * s3, 'cut')
-    sh.rect(fx + 3 + D.FRAME_RIB * s3, base - tf['tun_h'] * s3 + D.FRAME_RIB * s3, (tf['tun_w'] - 2 * D.FRAME_RIB) * s3, (tf['tun_h'] - 2 * D.FRAME_RIB) * s3, 'obj', 'style="fill:#fff"')
-    sh.text(fx + 3 + tf['tun_w'] * s3 / 2, base + 3.6, 'tunnel piece of %s' % tf['mark'], 'tb', 'middle')
-    sh.text(fx + 3 + tf['tun_w'] * s3 / 2, base + 6.8, '%.1f x %.1f above the roof plate' % (tf['tun_w'], tf['tun_h']), 'ts', 'middle')
+    tx_ = fx + 3
+    sh.rect(tx_, base - tf['tun_h'] * s3, tf['tun_w'] * s3, tf['tun_h'] * s3, 'cut')
+    if tf['tunnel_solid']:
+        g = tf['grommet']
+        sh.circ(tx_ + tf['tun_w'] * s3 / 2 + g['y'] * s3, base - g['z'] * s3, g['d'] / 2 * s3, 'obj', 'style="fill:#fff"')
+    else:
+        sh.rect(tx_ + D.FRAME_RIB * s3, base - tf['tun_h'] * s3 + D.FRAME_RIB * s3, (tf['tun_w'] - 2 * D.FRAME_RIB) * s3, (tf['tun_h'] - 2 * D.FRAME_RIB) * s3, 'obj', 'style="fill:#fff"')
+    sh.text(tx_ + tf['tun_w'] * s3 / 2, base + 3.6, 'tunnel piece of %s' % tf['mark'], 'tb', 'middle')
+    sh.text(tx_ + tf['tun_w'] * s3 / 2, base + 6.8, '%.1f x %.1f above the roof plate' % (tf['tun_w'], tf['tun_h']), 'ts', 'middle')
+    if tf['tunnel_solid']:
+        sh.text(tx_ + tf['tun_w'] * s3 / 2, base + 10, 'solid, one %.0f grommet hole' % tf['grommet']['d'], 'ts', 'middle')
     # ---- supports table (right of the frames)
     X = 268
     srows = []
@@ -123,21 +145,33 @@ def build(r=None):
     srows.append(('MC', 'Motor clamp cap, ply', '2', '%.1f x %.0f x %.3f' % (m['l'], m['w'], T)))
     sv_ = D.STEER_SERVO
     srows.append(('SV', 'Steering servo pad, ply', '1', '%.1f x %.1f x %.3f' % (sv_['l'] + 2 * D.PAD_MARGIN, sv_['w'] + 2 * D.PAD_MARGIN, T)))
-    bb = D.BLADE_BOX
-    srows.append(('BV', 'Blade servo box doubler, ply, under the deck', '1 each sponson', '%.1f x %.1f x %.3f' % (bb['l'] + 2 * D.PAD_MARGIN, bb['w'] + 2 * D.PAD_MARGIN, T)))
+    bb = D.BLADE_SERVO
+    srows.append(('BV', 'Blade servo shelf, ply, in the bow cap', '1', '%.1f x %.1f x %.3f, hung from the outboard cap wall and the cap ribs' % (bb['l'] + 2 * D.PAD_MARGIN, bb['w'] + 2 * D.PAD_MARGIN, T)))
     srows.append(('LP', 'Latch pad, ply, M3 nut captured', str(ht['latches']), '%.1f x %.1f x %.3f (A-503)' % (D.LATCH_PAD, D.LATCH_PAD, T)))
     srows.append(('RR', 'Hatch rim ring', str(ht['lids']), '%.3f thick, %.3f wide (A-503)' % (D.RIM_T, D.RIM_W)))
     capr = [f['mark'] for f in fr if hz and hz['kind'] == 'cap' and hz['x0'] < f['x'] < hz['x1']]
     if capr:
-        srows.append(('CR', 'Bow cap ribs (frames inside the cap), per sponson', str(len(capr)), ', '.join('%s X %.0f %.1f high' % (f['mark'], f['x'], hz['ztop'] - zd(f['x'])) for f in fr if f['mark'] in capr)))
+        sbx = G.blade_servo_box(zd)
+        srows.append(('CR', 'Bow cap ribs (frames inside the cap), per sponson', str(len(capr)), ', '.join('%s X %.0f %.1f high%s' % (
+            f['mark'], f['x'], hz['ztop'] - zd(f['x']), ' (crosses the blade servo, check 21)' if sbx and sbx.x0 < f['x'] + D.FRAME_T / 2 and sbx.x1 > f['x'] - D.FRAME_T / 2 else '') for f in fr if f['mark'] in capr)))
     cols = [('MARK', 11), ('PART', 54), ('QTY', 11), ('SIZE (mm)', 76)]
     ys0 = wtable(sh, X, 108, cols, srows, 'SUPPORT SCHEDULE', step=2.7, pad=0.6)
     # ---- frame schedule
-    cols = [('MARK', 10), ('X', 11), ('SPONSON OUT', 21), ('INSIDE', 15), ('HEIGHT', 15), ('OPENING', 25), ('TUNNEL W', 18), ('TUNNEL H', 18), ('NOTES', 127)]
+    cols = [('MARK', 9), ('X', 10), ('SPON OUT', 19), ('INSIDE', 13), ('HEIGHT', 13), ('SPONSON PIECE', 42), ('TUN W', 12), ('TUN H', 12), ('TUNNEL PIECE', 44), ('NOTES', 84)]
     rows = []
     for f in fr:
-        ot = '%.1f x %.1f' % (f['open_w'], f['open_h']) if (f['open_w'] > 0 and not f['bulkhead']) else ('solid' if f['bulkhead'] else 'none')
-        rows.append((f['mark'], '%.0f' % f['x'], '%.2f' % f['w_out'], '%.2f' % f['w_in'], '%.2f' % f['h'], ot, '%.2f' % f['tun_w'], '%.2f' % f['tun_h'], _short(f)))
+        if f['kind'] == 'ring':
+            ot = 'ring, opening %.1f x %.1f' % (f['open_w'], f['open_h'])
+        elif f['kind'] == 'bulkhead':
+            ot = 'bulkhead, solid'
+        elif f['kind'] == 'solid_shaft':
+            ot = 'solid, hole %.1f' % f['hole']['d']
+        elif f['kind'] == 'solid_notch':
+            ot = 'solid, notch %.1f' % f['notch_w']
+        else:
+            ot = 'solid'
+        tp = ('solid, grommet %.0f' % f['grommet']['d']) if f['tunnel_solid'] else 'ring, opening %.1f x %.1f' % (f['tun_w'] - 2 * D.FRAME_RIB, f['tun_h'] - 2 * D.FRAME_RIB)
+        rows.append((f['mark'], '%.0f' % f['x'], '%.2f' % f['w_out'], '%.2f' % f['w_in'], '%.2f' % f['h'], ot, '%.2f' % f['tun_w'], '%.2f' % f['tun_h'], tp, _short(f)))
     yf = wtable(sh, 160, 162, cols, rows, 'FRAME SCHEDULE (1/8 in, grain vertical; transom TR and tip TP are closures, A-103)', step=2.7, pad=0.6)
     # ---- details, left column
     sh.text(14, 162, 'MOTOR MOUNT MM, side view 1:1 (port; bow right)', 'tb')
@@ -179,8 +213,8 @@ def build(r=None):
         cx0 = 170
         cxs = lambda X: cx0 + s4 * (xb_ - X)
         z0_, z1_ = zd(xa_) - 8, hz['ztop'] + 6
-        czs = lambda Z: 236 - s4 * (Z - z0_)
-        sh.text(160, yf + 5, 'BOW CAP FRAMING, profile 1:4. End plates CA and CF, ribs at the frames inside the cap, top plate CT; blade stowed dashed.', 'tb')
+        czs = lambda Z: 241 - s4 * (Z - z0_)
+        sh.text(160, yf + 4, 'BOW CAP FRAMING, profile 1:4. End plates CA and CF, ribs at the frames inside the cap, top plate CT; blade stowed dashed.', 'tb')
         sh.poly([(cxs(xb_), czs(zd(xb_))), (cxs(xa_), czs(zd(xa_))), (cxs(xa_), czs(zd(xa_) - T)), (cxs(xb_), czs(zd(xb_) - T))], 'cut')
         for X_ in (hz['x0'], hz['x1']):
             sh.line(cxs(X_), czs(zd(X_)), cxs(X_), czs(hz['ztop']), 'thk')
@@ -192,6 +226,10 @@ def build(r=None):
         sh.pline([(cxs(x), czs(z)) for x, z in G.blade_outline(False) if xa_ <= x <= xb_ and z >= z0_], 'hid')
         sh.text(cxs(hz['x0']) + 1, czs(hz['ztop']) - 1.2, 'CA X %.0f' % hz['x0'], 'ts')
         sh.text(cxs(hz['x1']) - 14, czs(hz['ztop']) - 1.2, 'CF X %.0f' % hz['x1'], 'ts')
-        sh.text(cxs(hz['x0']) + 8, czs(hz['ztop']) + 8, 'cap top Z %.1f: %.1f above the deck at CA, %.1f at CF' % (hz['ztop'], hz['h0'], hz['h1']), 'ts')
+        sh.text(cxs(hz['x0']) + 8, czs(hz['ztop']) + 8, 'cap top Z %.1f: %.1f above the deck at CA, %.1f at CF; %s governs' % (hz['ztop'], hz['h0'], hz['h1'], hz['governs']), 'ts')
+        sbx_ = G.blade_servo_box(zd)
+        if sbx_:
+            sh.rect(cxs(sbx_.x1), czs(sbx_.z1), (sbx_.x1 - sbx_.x0) * s4, (sbx_.z1 - sbx_.z0) * s4, 'elec')
+            sh.text(cxs(sbx_.x1) + 1, czs(sbx_.z0) - 1.2, 'servo', 'ts')
         sh.text(cxs(hz['x0']) + 8, czs(hz['ztop']) + 12, 'ribs and end plates %.3f thick; each rib meets the deck and the top plate (two faces, blocked %.3f)' % (D.FRAME_T, D.BLOCK_LEG), 'ts')
     return sh

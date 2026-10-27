@@ -24,8 +24,7 @@ def _row_data(label):
         zd = r['deck']
         hs = G.housing(zd)
         ext, ret = G.blade_outline(True), G.blade_outline(False)
-        zmax = max(zd(0), zd(D.LOA), max(p[1] for p in ret), hs['top'](hs['x1']) if hs else 0,
-                   (zd(G.blade_box().x0) + G.blade_box().z1) if G.blade_params()['housing'] == 'cap' else 0)
+        zmax = max(zd(0), zd(D.LOA), max(p[1] for p in ret), hs['top'](hs['x1']) if hs else 0)
         zmin = min(-G.blade_depth(), G.SHOE_BOT)
         res = variants.metrics(r, __import__('model.checks', fromlist=['x']).run_all(r))
         return dict(label=label, base=base, over=over, r=r, zmax=zmax, zmin=zmin, m=res)
@@ -77,9 +76,9 @@ def _draw_row(sh, d, s, y_top, notes):
             sh.poly(P([(hs['x0'], zd(hs['x0'])), (hs['x1'], zd(hs['x1'])), (hs['x1'], hs['top'](hs['x1'])), (hs['x0'], hs['top'](hs['x0']))]), 'hid')
             sh.text(xs(hs['x0']) + 1.5, zs(hs['top'](hs['x0'])) + 2.4, hs['kind'] if hs['kind'] == 'tower' else 'bow cap', 'ts')
         if b['housing'] == 'cap':
-            bx = G.blade_box()
-            sh.poly(P([(bx.x0, zd(bx.x0)), (bx.x1, zd(bx.x1)), (bx.x1, zd(bx.x1) + bx.z1), (bx.x0, zd(bx.x0) + bx.z1)]), 'hid')
-            sh.text(xs(bx.x0) + 1.5, zs(zd(bx.x0) + bx.z1) + 2.4, 'servo box', 'ts')
+            bx = G.blade_servo_box(zd)
+            sh.rect(xs(bx.x1), zs(bx.z1), (bx.x1 - bx.x0) * s, (bx.z1 - bx.z0) * s, 'hid')
+            sh.text(xs(bx.x0) + 1.5, zs(bx.z1) + 2.4, 'servo in cap', 'ts')
         # blade: extended solid, retracted dashed
         sh.poly(P(G.blade_outline(True)), 'blade')
         sh.poly(P(G.blade_outline(False)), 'hid')

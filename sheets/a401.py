@@ -11,7 +11,7 @@ def build(r=None, alts=None):
     alts = alts or [hydro.at(x, r) for x in D.ALT_BAT_X]
     sh = Sheet('A-401', 'Sealing, RC channels and trim',
                'Penetration and sealing schedule, RC channel plan, trim at the design and alternate battery positions', 'NTS')
-    rows = S.sealing()
+    rows = S.sealing(r['deck'])
     cols = [('REF', 10), ('PENETRATION', 62), ('WHERE', 84), ('SEAL METHOD', 140), ('CHECK', 112)]
     y = wtable(sh, 14, 38, cols, rows, 'SEALING AND PENETRATION SCHEDULE (the hull is sealed, no bilge pump; every row is tested before the first run)')
     y += 12
@@ -28,18 +28,32 @@ def build(r=None, alts=None):
     yt = wtable(sh, X0, y, cols, trows, 'TRIM AT REST (draft in mm below the keel; deck built level at X %.0f)' % D.DESIGN_BAT_X)
     yt += 3
     for t in ['Bow down and deck off level in deg. Margin is the water over the nozzle top less the %.0f mm trough (check 6).' % D.TROUGH,
-              'Skeg buoyancy %.0f cm3 is included. Not in the weight: %s.' % (G.SKEG_VOL, ', '.join(n for _, n, _, _ in __import__('model.weights', fromlist=['x']).UNWEIGHED).lower())]:
+              'Skeg buoyancy %.0f cm3 is included, with %.1f cm3 of root fillets; the four bilge rounds are subtracted from the hull sections (A-601). Not in the weight: %s.' % (
+                  G.SKEG_VOL, G.SKEG_VOL_FILLET, ', '.join(n for _, n, _, _ in __import__('model.weights', fromlist=['x']).UNWEIGHED).lower())]:
         yt = para(sh, X0, yt, t, 96, 'ts', 3.3, 2)
-    yt += 3
-    sh.text(X0, yt, 'COOLING AND POWER NOTES', 'tb')
-    yt += 3.6
+    # sealed compartments of one sponson (the frames are A-502)
+    yt += 6
+    comp = S.compartments(r['deck'])
+    crows = [('%s' % n, 'X %.1f to %.1f' % (c['x0'], c['x1']), c['closes'], ', '.join(c['frames']) or 'none', ', '.join(c['inside']) or 'empty')
+             for n, c in zip(('Stern', 'Motor', 'Battery', 'Forward', 'Bow'), comp)]
+    cols = [('COMPARTMENT', 22), ('X', 28), ('CLOSED BY', 42), ('FRAMES INSIDE', 34), ('CONTENTS', 60)]
+    yt = wtable(sh, X0, yt + 2, cols, crows, 'SEALED COMPARTMENTS, EACH SPONSON (all sealed; wires only through BH1 and BH2, S8)', 'ts')
+    sh.text(X0, yt + 3.6, 'Stern X 0 to %.0f and bow X %.0f to %.0f are sealed by the solid frames F%s; F1 is solid inside the stern compartment. Frames: A-502.' % (
+        D.FRAME_X[D.SEAL_FRAMES[0] - 1], D.FRAME_X[D.SEAL_FRAMES[1] - 1], D.LOA, ' and F'.join(str(i) for i in D.SEAL_FRAMES)), 'ts')
+    yt += 6
+    yl = y1 + 6
+    sh.text(14, yl, 'COOLING AND POWER NOTES', 'tb')
+    yl += 3.6
     notes = ['Cooling loop per side: sponson pickup, ESC, motor jacket, side outlet. Jackets are kept (JACKETS %s). Pickup and outlet positions are PENDING; the v3 prop-wash pickup no longer exists with the nozzles aft of the transom.' % D.JACKETS,
              'One BEC feeds the receiver and both servos: pull the red lead of the second ESC receiver cable. Confirm the combined servo peak against the 6 V / 3 A BEC.',
-             'Steering travel %.0f deg each side is ASSUMED (v8 sheets said 45). Slow-speed running of sensorless motors is a bench test (Model Boat Mayhem 42581).' % D.STEER_TRAVEL_DEG]
+             'Steering travel %.0f deg each side is ASSUMED (v8 sheets said 45). Slow-speed running of sensorless motors is a bench test (Model Boat Mayhem 42581); see the slow-speed study.' % D.STEER_TRAVEL_DEG]
     for t in notes:
-        yt = para(sh, X0, yt, t, 96, 'ts', 3.3, 2) + 0.8
+        yl = para(sh, 14, yl, t, 190, 'ts', 3.3, 2) + 0.8
+    y_right = yt
+    # the right column runs past the diagram's notes; the diagram follows the left column and the notes at X 244 clear the right column
+    yt = max(yl, y_right - 14)
     # ---- power, signal and cooling block diagram
-    yb = max(y1, yt) + 11
+    yb = yt + 11
     sh.text(14, yb - 3, 'POWER, SIGNAL AND COOLING (blocks, not to scale)', 'tb')
     bh = 12
 
@@ -72,5 +86,17 @@ def build(r=None, alts=None):
     sh.pline([(110, ym + 9), (116, ym + 9), (116, ym + bh + 3), (216, ym + bh + 3), (216, ym + bh)], 'dim')
     sh.text(150, ym + bh + 6.2, 'CH4 daggerboard, line and spool', 'ts')
     sh.text(244, ym + 4, 'steering: pushrod and tie bar to both nozzle posts', 'ts')
-    sh.text(244, ym + 8, 'blade: servo in the deck box, line to the blade', 'ts')
+    sh.text(244, ym + 8, 'blade: servo in the bow cap, line to the blade', 'ts')
+    # ---- slow-speed study (text only, computed from design.py)
+    xs_ = 332
+    ys_ = y_right + 4
+    sh.text(xs_, ys_, 'SLOW-SPEED STUDY (text only)', 'tb')
+    ys_ += 4.4
+    ss = S.slow_speed()
+    ys_ = para(sh, xs_, ys_, 'Motor ATO 3670, %.0f kV (published). No-load rpm = kV x pack volts. Sensorless floor assumed at %.0f%% of no-load rpm (ASSUMED).' % (D.MOTOR_KV, D.FLOOR_FRACTION * 100), 88, 'ts', 3.3, 2)
+    for q in ss:
+        ys_ = para(sh, xs_, ys_ + 0.6, '%s %.1f V: no-load %s rpm, floor %s rpm%s.' % (
+            q['cells'], q['volts'], format(round(q['noload']), ','), format(round(q['floor']), ','), ' (design pack)' if q['cells'] == D.PACK_V[0][0] else ' (study case)'), 88, 'ts', 3.3, 2)
+    ys_ = para(sh, xs_, ys_ + 0.6, 'Prop pitch is not published, so the boat speed at the floor rpm cannot be computed. Bench test required: run each prop at its floor and measure.', 88, 'ts', 3.3, 2)
+    ys_ = para(sh, xs_, ys_ + 0.6, 'Radio: set dual rate and expo on the FS-i6X throttle channels (CH2, CH3) for fine control at low throttle; values are set at the bench.', 88, 'ts', 3.3, 2)
     return sh

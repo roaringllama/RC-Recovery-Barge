@@ -60,7 +60,7 @@ def build(r=None):
     sh.dimh(vx - L, vx, vy - L - 4, '%.2f' % D.CHINE_LEG, vy - L, vy - L)
     sh.text(X1 - 6, yb + 7, 'outer radius R%.1f, inner (skin) radius R%.2f' % (D.BILGE_R, D.BILGE_R - T), 'ts')
     sh.text(X1 - 6, yb + 11, 'flat bearing on each skin face %.2f plus the arc' % (D.CHINE_LEG + T - D.BILGE_R), 'ts')
-    sh.text(X1 - 6, yb + 15, 'faces: wall skin, bottom skin, arc (3 faces)', 'ts')
+    sh.text(X1 - 6, yb + 15, 'faces: wall skin, bottom skin, arc (3 faces); the tunnel-side corner is also R%.0f (J1 blocking)' % D.BILGE_R, 'ts')
     sh.leader(xo - R + 3, yb - 1, X1 + 10, yb + 5) if False else None
     # ---- J3 wall to deck
     X2, Yd = 218, 52

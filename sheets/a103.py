@@ -20,16 +20,17 @@ def build(r=None):
     oy = 74
     ys = lambda Y: oy - s * (Y - G.HT)
     P = lambda pts: [(xs(x), ys(y)) for x, y in pts]
-    sh.text(14, 33, 'PORT SPONSON PLAN (bow at left). Starboard is the mirror. Skin %.3f; frames F1 to F%d dashed.' % (T, len(D.FRAME_X)), 'tb')
+    sh.text(14, 33, 'PORT SPONSON PLAN (bow at left). Starboard is the mirror. Skin %.3f; frames F1 to F%d dashed (solid frames heavy).' % (T, len(D.FRAME_X)), 'tb')
     sh.poly(P(S.POLY), 'obj', 'style="fill:#fff"')
     sh.pline(P([(x, y - T) for x, y in S.OUTER]), 'thin')
     sh.pline(P([(x, y + T) for x, y in S.INNER]), 'thin')
+    fk = {f['x']: f['kind'] for f in S.frames(zd)}
     for i, fx in enumerate(D.FRAME_X, 1):
         a, b = float(G.inner_wall_y(fx)), float(G.outer_wall_y(fx))
-        sh.line(xs(fx), ys(a) + 1, xs(fx), ys(b) - 1, 'hid')
+        sh.line(xs(fx), ys(a) + 1, xs(fx), ys(b) - 1, 'thk' if fk[fx] != 'ring' else 'hid')
         sh.text(xs(fx), ys(b) - 2.0 - (i % 2) * 2.6, 'F%d' % i, 'ts', 'middle')
-    sh.rect(xs(G.SKEG_X0), ys(G.YS + D.SKEG_W / 2), (G.SKEG_X0 - G.SHOE_X1) * s, D.SKEG_W * s, 'hid')
-    sh.text(xs(G.SKEG_X0 / 2), ys(G.YS) + 0.8, 'skeg box below, %.2f wide, X %.1f to %.1f' % (D.SKEG_W, G.SKEG_X0, G.SHOE_X1), 'ts', 'middle')
+    sh.rect(xs(G.SKEG_X0), ys(G.YS + D.SKEG_W / 2), G.SKEG_X0 * s, D.SKEG_W * s, 'hid')
+    sh.text(xs(G.SKEG_X0 / 2), ys(G.HT) + 6.8, 'dashed: skeg box below, %.2f wide, X %.1f to %.1f' % (D.SKEG_W, G.SKEG_X0, G.SHOE_X1), 'ts', 'middle')
     # station dimensions along the inner wall
     yd = ys(G.HT) + 11
     pts = [D.LOA, G.BOW0, D.AFT_TAPER_X, 0.0]
@@ -65,14 +66,14 @@ def build(r=None):
         sh.dimv(zs(zd(x) - T), zs(T), xs(x) + (off if x == 0 else -off), '%.2f' % h, xs(x), xs(x))
     sh.text(xs(D.LOA / 2), zs(0) + 7, 'deck rises %.2f deg toward the bow relative to the keel line (deck parallel to the waterline); wall tops are planed to it' % abs(math.degrees(math.atan(r['k']))), 't', 'middle')
     # ---- stations table (right)
-    X0 = 322
+    X0 = 300
     st = S.stations(zd)
-    rows = [('%.1f' % q['x'], '%.2f' % q['w_out'], '%.2f' % q['w_in'], '%.2f' % q['deck'], '%.2f' % q['wall'], '%.2f' % q['tun_w'], '%.2f' % q['tun_h']) for q in st]
-    cols = [('X', 12), ('SPONSON', 16), ('INSIDE', 14), ('DECK Z', 14), ('WALL H', 14), ('TUNNEL W', 14), ('TUNNEL H', 14)]
+    rows = [('%.1f' % q['x'], q['label'], '%.2f' % q['w_out'], '%.2f' % q['w_in'], '%.2f' % q['deck'], '%.2f' % q['wall'], '%.2f' % q['tun_w'], '%.2f' % q['tun_h']) for q in st]
+    cols = [('X', 9), ('FRAME', 35), ('SPONSON', 14), ('INSIDE', 12), ('DECK Z', 12), ('WALL H', 12), ('TUN W', 11), ('TUN H', 11)]
     y = wtable(sh, X0, 38, cols, rows, 'STATIONS: transom, frames F1 to F%d, tip' % len(D.FRAME_X), step=3.0, pad=0.8)
     y += 5
     notes = ['Sponson = outside width. Inside = less 2 skins. Wall H = deck Z less 2 x %.3f (the wall stands on the bottom and carries the deck).' % T,
-             'Tunnel W = distance between the two inner wall faces; tunnel H = deck underside above the roof plate top (Z %.2f).' % G.ROOF_Z1,
+             'TUN W = tunnel width, the distance between the two inner wall faces; TUN H = deck underside above the roof plate top (Z %.2f). FRAME gives the kind of each sponson piece (A-502): ring, solid, solid with the shaft hole, solid with the trunk notch, or bulkhead.' % G.ROOF_Z1,
              'Turn angles: aft taper %.2f deg per wall, bow %.2f deg, tip outer %.2f deg, tip inner %.2f deg, transom corners %.2f deg. Joints in A-501.' % (S.aft_taper_deg(), S.bow_taper_deg(), tn[3][2], tn[4][2], tn[0][2]),
              'Planks run along the long side of each panel; sheet stock %.1f wide (STOCK_W, ASSUMED); seams are backed (J5) and kept off hatch edges.' % D.STOCK_W]
     notes.append('Hull skin by this schedule %.0f cm2 (%.4f m2); the weight model (A-601) strips give %.0f cm2. Hatch openings are not deducted.' % (S.hull_area_total(pl) / 100, S.hull_area_total(pl) / 1e6, r['area'] / 100))

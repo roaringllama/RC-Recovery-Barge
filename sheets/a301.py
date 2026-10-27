@@ -82,7 +82,7 @@ def build(r=None, alts=None):
             (2, 150, G.shaft_z(150), 'Angled shaft inside the hull and skeg, no seal'),
             (3, D.CV_X, D.PROP_Z - D.CV_OD_ASSUMED / 2, 'CV joint at X %.0f, Z %.0f, working angle %.0f deg (OD %.0f assumed)' % (D.CV_X, D.PROP_Z, D.MOTOR_AXIS_DEG, D.CV_OD_ASSUMED)),
             (4, 8, D.PROP_Z, 'Level stern tube; the only seal is at the transom'),
-            (5, -40, D.PROP_Z, 'Kort nozzle %.0f x %.0f (assumed), prop level' % (D.NOZ_OD, D.NOZ_L)),
+            (5, -40, D.PROP_Z, 'Kort nozzle %.0f x %.0f (assumed), %.0f prop (approved), level axis' % (D.NOZ_OD, D.NOZ_L, D.PROP_D)),
             (6, 100, G.skeg_bot(100), 'Skeg: planked box, %.0f wide, bottom edge %.1f deg, open to the hull' % (D.SKEG_W, G.SKEG_BOT_DEG)),
             (7, -50, G.SHOE_BOT, 'Shoe: %.2f thick, %.0f under the nozzle, %.0f long' % (D.SHOE_T, D.SHOE_CLR, -G.SHOE_X1)),
             (8, G.POSTX, G.SHOE_TOP + 4, 'Bottom pintle: %.0f mm pin, %.0f below the nozzle, %.0f deep in a %.0f OD brass bushing (wall %.1f) in the shoe (fabricated, ASSUMED)' % (D.PINTLE_D, G.PINTLE_L, D.PINTLE_ENGAGE, D.BUSHING_OD, G.BUSHING_WALL)),
@@ -115,7 +115,7 @@ def build(r=None, alts=None):
     bp = G.blade_params()
     ext, ret = G.blade_outline(True), G.blade_outline(False)
     hs = G.housing(zd)
-    bb = G.blade_box() if bp['housing'] == 'cap' else None
+    bb = G.blade_servo_box(zd) if bp['housing'] == 'cap' else None
     t0, t1 = G.trunk_x()
     xl = min(min(p[0] for p in ext + ret), t0) - 20
     xr = D.LOA + 10
@@ -123,7 +123,7 @@ def build(r=None, alts=None):
     if hs and hs['kind'] == 'cap':
         ztops.append(hs['ztop'])
     if bb:
-        ztops.append(zd(bb.x0) + bb.z1)
+        ztops.append(bb.z1)
     ztop = max(ztops) + 8
     zbot = -G.blade_depth() - 8
     avail = 72
@@ -149,8 +149,14 @@ def build(r=None, alts=None):
         sh.rect(xi(u1), zi(zd(u1) + D.TOWER_H), (u1 - u0) * si, D.TOWER_H * si, 'gray')
         sh.text(xi(u0) - 2, zi(zd(u0) + D.TOWER_H / 2), 'tower', 'ts', 'end')
     if bb:
-        sh.poly(Pi([(bb.x0, zd(bb.x0)), (bb.x1, zd(bb.x1)), (bb.x1, zd(bb.x1) + bb.z1), (bb.x0, zd(bb.x0) + bb.z1)]), 'elec')
-        sh.text(xi((bb.x0 + bb.x1) / 2), zi(zd(bb.x0) + bb.z1 / 2), 'servo box', 'ts', 'middle')
+        spx, spz = G.spool_pos(zd)
+        ae, as_ = G.line_attach(True), G.line_attach(False)
+        sh.rect(xi(bb.x1), zi(bb.z1), (bb.x1 - bb.x0) * si, (bb.z1 - bb.z0) * si, 'elec')
+        sh.line(xi(ae[0]), zi(ae[1]), xi(spx), zi(spz), 'thk')
+        sh.line(xi(as_[0]), zi(as_[1]), xi(spx), zi(spz), 'hid')
+        sh.circ(xi(spx), zi(spz), 0.9, 'obj', 'style="fill:#fff"')
+        sh.circ(xi(ae[0]), zi(ae[1]), 0.6, 'obj', 'style="fill:#111"')
+        sh.text(xi(bb.x1) - 1, zi(bb.z0) + 3.4, 'servo', 'ts', 'start')
     sh.poly(Pi(ext), 'blade'); sh.poly(Pi(ret), 'hid')
     sh.circ(xi(bp['hinge_x']), zi(bp['hinge_z']), 0.7, 'obj', 'style="fill:#fff"')
     sh.line(xi(xr), zi(wl(xr)), xi(xl), zi(wl(xl)), 'wl')
@@ -173,10 +179,11 @@ def build(r=None, alts=None):
     else:
         blade_notes = ['Hinge X %.0f, Z %.0f; R%.0f; %.0f deg sector. Extended %.1f below the keel (solid); stowed in the trunk and tower (dashed).' % (bp['hinge_x'], bp['hinge_z'], bp['R'], bp['sector_deg'], G.blade_depth())]
     if hs and hs['kind'] == 'cap':
-        blade_notes.append('Bow cap X %.0f to %.0f over the stowed blade: flat top Z %.1f, %.0f clear of the stowed tip, %.0f above the deck at the aft end and %.0f at the bow end; full sponson width.' % (
-            hs['x0'], hs['x1'], hs['ztop'], D.CAP_CLR, hs['h0'], hs['h1']))
+        blade_notes.append('Bow cap X %.0f to %.0f over the stowed blade and the servo: flat top Z %.1f, %.0f above the %s (stowed blade top Z %.1f, servo top Z %.1f), %.1f above the deck at the aft end and %.1f at the bow end; full sponson width.' % (
+            hs['x0'], hs['x1'], hs['ztop'], D.CAP_CLR, hs['governs'], hs['z_blade'], hs['z_servo'], hs['h0'], hs['h1']))
     if bb:
-        blade_notes.append('Blade servo and spool in the deck box at the hinge, X %.0f to %.0f, %.0f high. The servo drives the blade forward against a stop; gravity does not deploy it.' % (bb.x0, bb.x1, bb.z1))
+        blade_notes.append('Blade servo on its side in the cap, X %.0f to %.0f, outboard of the blade plane, on a shelf at Z %.1f. The lift line attaches to the blade upper edge %.0f from the hinge (X %.0f) and runs straight up the open trunk to the spool; the line lifts the blade to stow. The blade tip stops %.1f short of the trunk end.' % (
+            bb.x0, bb.x1, bb.z0, D.LINE_R, G.line_x(), G.tip_to_trunk_end()))
     for t in blade_notes:
         ny = para(sh, nx, ny, t, 80, step=4.2, hang=0) + 0.6
     return sh
