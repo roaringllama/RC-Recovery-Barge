@@ -309,11 +309,11 @@ def test_post_required_length_and_check_18(r, monkeypatch):
     assert not checks.c18(r)[1]                               # the check compares to the cut stock, here a 50 mm piece
 
 
-def test_parts_has_post_rod_and_tube_with_no_price_or_mass():
+def test_parts_has_post_rod_and_tube_sourced_with_no_mass():
     from model import parts as P
     for k in ('post_rod', 'post_tube'):
         p = P.get(k)
-        assert p.price is None and p.mass is None and p.qty == 1 and '300 mm' in p.spec and 'Source' in p.note
+        assert p.price and p.price > 0 and p.cur == 'USD' and p.link.startswith('https://') and p.mass is None and p.qty == 1 and '300 mm' in p.spec and 'Source' in p.note
 
 
 def test_shaft_length_is_derived():
@@ -510,3 +510,19 @@ def test_a004_is_not_in_the_set():
     src = open(os.path.join(ROOT, 'build.py')).read()
     assert 'a004' not in src
     assert os.path.exists(os.path.join(ROOT, 'sheets', 'a004.py'))
+
+
+def test_order_parts_lines_and_workbook(tmp_path, r):
+    import openpyxl
+    from model import order_parts as OP
+    from tools import order_sheet
+    ls = OP.lines(r)
+    assert ls and all(l['price'] > 0 and l['url'].startswith('https://') and l['checked'] == OP.CHECKED and l['qty'] >= 1 for l in ls)
+    assert {l['cur'] for l in ls} <= {c for c, _ in OP.RATES}
+    for l in ls:                                          # no em dash or en dash in any text
+        assert not any(d in str(v) for v in l.values() for d in (chr(0x2014), chr(0x2013)))
+    path, tot = order_sheet.main(str(tmp_path), r)
+    wb = openpyxl.load_workbook(path)
+    assert wb.sheetnames == ['Order', 'Summary', 'Exchange rates', 'Sources']
+    assert tot['grand'] > 0 and tot['substitutes'] == sum(1 for l in ls if l['sub'])
+    assert abs(sum(tot['by_group'].values()) - tot['grand']) < 1e-9

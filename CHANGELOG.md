@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-10-27, parts sourced with current prices; parts ordering spreadsheet v1
+
+New ordering document: `tools/order_sheet.py` writes `out/RC_Recovery_Barge_Parts_Order_v1.xlsx` (sheets Order, Summary, Exchange rates, Sources) from the reusable data file `model/order_parts.py`. `tools/build_list.py` and its Build List are unchanged; the order sheet is the document to buy from.
+
+- 36 order lines, each with vendor, exact product name, part number, unit price and currency, date checked (2026-10-27), link, published weight where one exists, stock status as shown on the page, quantity and the quantity arithmetic. Unit USD uses input cells on the Exchange rates sheet (ECB reference rates of 2026-10-26: 1 EUR = 1.1188 USD, 1 GBP = 1.3348 USD).
+- Hull quantities come from the model with the 10 percent waste allowance: 22 balsa sheets 1/8 x 3 x 36 in (skin, trunks and caps, frames, lids, plugs, mounts, rails, and the seam backing strips), 17 sticks 3/8 in, 3 sticks 3/4 in, cord 3 x 3 ft, 12 thumb screws and nuts, 2 yd of 2 oz cloth, 3 epoxy kits. These replace the rough counts in the Build List, which lumps the backing strips into the 3/8 in sticks and leaves out frames, caps and lids.
+- Substitutes (flagged in the sheet): single universal joint in place of a double CV joint rated 14 deg (none found at 5 mm to 4 mm); aluminum water-cooled motor mount (the v3 listing could not be re-checked); Traxxas 5725 for 10325 (sold out); G10 0.060 in x 12 x 24 in for 1.5 mm x 300 x 300 mm.
+- Findings, not fixed: the Romarin shaft is 300 mm but the model shaft is 373.3 mm (`G.SHAFT_LEN`); the R375 blade is longer than a 300 mm sheet; the SeaKing 60A V3.1 is sold out at most dealers and Hobbywing North America now lists only the V4.
+- `model/parts.py`: prices, vendors, links and part numbers updated to the order sheet. The nozzle post rod and tube are now sourced (K&S 9865 and 9822); the second servo is priced as a single servo; the M6 outlets are one 2-pack. Structure and masses unchanged, except the connector pack (7.0 g, two pieces installed). `tests/test_model.py`: the post rod and tube test now expects a price, and a new test covers the order data and workbook.
+
 ## CadQuery model, STEP and glTF export, three.js viewer and still renders
 
 - `tools/cad.py`: the boat as CadQuery solids from the model at the design battery position (hull shell with bilge rounds and bow tip fillets, deck skins, tunnel roof, center and aft deck, push pad, bow caps with 3 mm edge rounds, skegs with edge rounds, shoes and lofted root fillets, nozzle rings, props with four flat blades, posts, extended and stowed blades, electronics, water plane at the solved waterline). Exports STEP, one STL per group, glb, `manifest.json` and `render_info.json` to `out/cad/`.
