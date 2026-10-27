@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-10-27, v9.3: raised push bar, deck plan option, framed aft deck
+
+All items tagged in `design.py` (APPROVED, owner 2026-10-27, unless marked). `REV` is v9.3.
+
+- Push bar replaces the full-height bow push pad (`PUSH_PAD_T` and `PUSH_PAD_INSET` removed). Bottom `BUMPER_Z0` = waterline at the bow + `BUMPER_WL_CLR` (10, ASSUMED), top flush with the deck at the bow (`BUMPER_Z1`), so 50 deep, independent of the hydro solve. `BUMPER_T` 10 balsa with a 1.5 ply face (ASSUMED), `BUMPER_PROJ` 15 ahead of the bow tip (ASSUMED), X 818 to 828. It reaches the bow caps through two 12 mm ply arms on the deck top (`BUMPER_ARM_W`, my own detail: the caps end at X 785, the bar starts at X 818; needs owner confirmation).
+- `DECK_PLAN`: `rect` (default, PENDING) is one 285 wide rectangle from the bar to the aft deck end, overhanging the sponsons 15.5 each side on the frames extended as deck brackets (F1 to F9, 18 pieces). `taper` is the previous deck with the aft deck edges chamfered in over the last `AFT_CHAMFER_L` (60) and the bar ends chamfered back at 45 deg. Both plans are modeled in the outline, skin areas, brackets, bar, weights, nozzle check and the sheets; `variants.deck_plan()` switches between them and `variants.plan_rows()` solves both (A-601 table).
+- Aft deck is a framed closed box 12.7 deep (`AFT_DECK_DEPTH`): top skin, bottom skin, two long beams 19.05 x 6.35 (`AFT_BEAM`, ASSUMED) at the sponson centerlines with the post bushings, a transom beam and an end beam.
+- New check 22, aft deck cantilever: 1000 g (`AFT_LOAD`) at the aft edge, balsa 8 MPa along the grain, E 3000 MPa (all ASSUMED), 2 beams as rectangles. Margin 2.06 (need 2.0), tip deflection 1.41 mm. One beam alone would be 1.03; the post holes, skins and (rect) the overhang are not credited, and the overhang strength is not modeled. New check 23, push bar bottom edge above the water at every battery position (10.0 above at 475, 7.1 at 520, 2.7 at 590) and the bar ahead of everything submerged. Check 17 uses the chosen outline. 24 checks.
+- Results at 475, batteries at the design position. v9.2: 3168.8 g, LCG 397.0, stern draft 26.36, bow draft 34.79, 0.594 deg bow down, 36.4 over the nozzle top. v9.3 rect: 3246.7 g, LCG 391.1, stern 29.45, bow 33.59, 0.292 deg, 39.4 over (14.4 after the trough); 0 failed. v9.3 taper: 3186.2 g, LCG 386.8, stern 29.99, bow 31.89, 0.134 deg, 40.0 over; check 17 fails (forward chamfer step, margin -0.2 at 63.8 deg), reported, not tuned away.
+- Sheets A-101, A-103, A-104, A-301, A-401, A-502, A-503, A-601 and `tools/cad.py` updated (CAD group `push_pad` is now `bumper`; aft deck box, brackets and bar parts added). Schedules: panels AD, AB, DO, BP; supports ALB, ATB, AEB, DBK, BA; sealing S11 (aft deck box) and S12 (bar mounts). A-401 starboard power row no longer repeats the port notes over the title block. Tests extended (62).
+
 ## 2026-10-27, parts sourced with current prices; parts ordering spreadsheet v1
 
 New ordering document: `tools/order_sheet.py` writes `out/RC_Recovery_Barge_Parts_Order_v1.xlsx` (sheets Order, Summary, Exchange rates, Sources) from the reusable data file `model/order_parts.py`. `tools/build_list.py` and its Build List are unchanged; the order sheet is the document to buy from.

@@ -70,6 +70,8 @@ def build(r=None, alts=None):
         box(196, y, 40, 'shaft, CV joint\nnozzle and prop', 'prop')
         for a_, b_ in ((50, 70), (110, 130), (176, 196)):
             sh.line(a_, y + bh / 2, b_, y + bh / 2, 'thk')
+        if nm != 'port':
+            continue                                                        # the starboard row repeats the port notes (and would sit on the title block)
         sh.text(244, y + 4, 'water: pickup (X %s) > ESC > jacket > outlet (X %s)' % (
             'PENDING' if D.COOL_PICKUP_X is None else '%.0f' % D.COOL_PICKUP_X, 'PENDING' if D.COOL_OUTLET_X is None else '%.0f' % D.COOL_OUTLET_X), 'ts')
         sh.text(244, y + 8, 'XT60 battery to ESC, 3 phase to the motor, shaft through the stern tube', 'ts')

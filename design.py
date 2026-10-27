@@ -15,7 +15,7 @@ When something does not fit, record it in the checks report; do not alter a valu
 """
 
 # ---- document ----------------------------------------------------------------------------------
-REV = 'v9.2'                    # sheet revision label, used on every sheet and in the output file name, APPROVED (owner review 2026-10-27: blade R375, servo in the bow cap, rounded underwater edges, solid frames, studies)
+REV = 'v9.3'                    # sheet revision label, used on every sheet and in the output file name, APPROVED (owner review 2026-10-27: bumper raised to deck level on the caps, rectangular deck option, framed aft deck)
 REV_DATE = '2026-10-27'         # sheet date, APPROVED
 PROJECT = 'RC Recovery Barge, 32 in sailboat recovery catamaran'   # title block text, APPROVED
 
@@ -39,16 +39,35 @@ BAT_SERVICE_X = 504.0           # battery center X for lift-out: slide the batte
 ALT_BAT_X = (520.0, 590.0)      # alternate battery positions on the same deck (trim table, sweep), APPROVED (kept as alternates to the design position 475)
 AFT_DECK_L = 101.6              # aft deck over the nozzles, length aft of the transom, APPROVED
 AFT_DECK_W = 285.0              # aft deck width (was 270; widened so a nozzle swept 0 to 90 deg keeps the 5 mm bumper margin, check 17), APPROVED (owner, 2026-10-27)
-AFT_DECK_T = 3.175              # aft deck thickness, APPROVED
-PUSH_PAD_T = 10.0               # bow push pad thickness, full bow face (BEAM wide), APPROVED
-PUSH_PAD_INSET = 5.0            # pad stops this far above the keel and below the deck, ASSUMED
+AFT_DECK_T = SKIN_T             # aft deck top skin thickness (the bottom skin and the overhang skin are SKIN_T as well), APPROVED
 ROOF_Z0 = 45.7                  # tunnel roof plate bottom; plate thickness = SKIN_T, APPROVED
+PLY_RHO = 0.65                  # g/cm3, birch ply or hardwood face (bumper face and arms), handbook value, ASSUMED
+GRAVITY = 9.80665               # m/s2, standard gravity (unit factor for the cantilever check)
 BALSA_RHO = 0.144               # g/cm3 (9 lb/ft3), ASSUMED
 BALSA_RHO_HI = 0.160            # g/cm3 (10 lb/ft3), density sensitivity case, reported next to BALSA_RHO on A-601, ASSUMED
 GLASS_OUT = 250.0               # g/m2 glass and epoxy, outside, ESTIMATE
 GLASS_IN = 200.0                # g/m2 glass and seal coat, inside, ESTIMATE
 LB_FT3_PER_G_CM3 = 62.428     # unit factor, lb/ft3 per g/cm3 (for labels)
 STEEL_RHO = 7.85                # g/cm3, shaft steel, ASSUMED (handbook value)
+
+# ---- deck plan, push bar, framed aft deck (v9.3, owner 2026-10-27) ------------------------------
+DECK_PLAN = 'rect'              # 'rect' or 'taper' (DECK_PLANS); PENDING: the owner is leaning to one big rectangle, so 'rect' is the default. rect = one rectangular deck, AFT_DECK_W wide, from the push bar to the aft deck end, overhanging the sponson sides by (AFT_DECK_W - BEAM) / 2 each side on the frames extended as deck brackets; taper = the v9.2 deck (hull outline plus the aft deck), aft deck outer edges chamfered in to the sponson sides, bar ends chamfered back to the deck
+DECK_PLANS = ('rect', 'taper')  # the two options, APPROVED (owner, 2026-10-27)
+AFT_CHAMFER_L = 60.0            # taper only: the aft deck outer edges run in to the sponson sides (Y = BEAM / 2) over the last this many mm, APPROVED (owner, 2026-10-27)
+BUMPER_CHAMFER_DEG = 45.0       # taper only: the push bar ends are chamfered back to the deck at this angle in plan, APPROVED (owner, 2026-10-27)
+BUMPER_WL_CLR = 10.0            # push bar bottom edge above the waterline at rest (bar Z0 = waterline + this, bar Z1 = deck top at the bow, so the bar depth is FREEBOARD less this), ASSUMED
+BUMPER_WL_CLR_MIN = 0.0         # check 23: the bar bottom is above the water at rest by more than this at every battery position on the slide (the 10 is the design position only), ASSUMED
+BUMPER_T = 10.0                 # push bar thickness along X (balsa core plus the face), ASSUMED
+BUMPER_FACE_T = 1.5             # hardwood or ply face on the front of the bar, part of BUMPER_T, ASSUMED
+BUMPER_PROJ = 15.0              # the bar front face projects this far forward of the bow tip, so it meets a sailboat hull before the tip does, ASSUMED
+BUMPER_ARM_W = 12.0             # ply mount arm width, one per bow cap, from the cap forward end plate along the deck to the bar, ASSUMED
+BUMPER_ARM_T = SKIN_T           # ply mount arm thickness, lying on the deck top, ASSUMED
+AFT_BEAM = dict(w=19.05, h=6.35)   # aft deck beam section: width along X or Y, height between the skins, ASSUMED
+AFT_DECK_DEPTH = 12.7           # aft deck closed box depth: top skin, beam height, bottom skin (check 22 tests that they add up), ASSUMED
+AFT_LOAD = 1000.0               # g, owner load (a hand resting on it) at the aft edge, shared by the two longitudinal beams, ASSUMED
+BALSA_SIGMA = 8.0               # MPa, balsa bending allowable along the grain, ASSUMED
+E_BALSA = 3000.0                # MPa, balsa modulus along the grain, ASSUMED
+AFT_MARGIN_MIN = 2.0            # check 22 fails when allowable stress over the beam stress is under this, APPROVED (owner, 2026-10-27)
 
 # ---- drivetrain --------------------------------------------------------------------------------
 MOTOR_D = 36.0                  # ATO 3670 can diameter, APPROVED
@@ -205,6 +224,7 @@ PACK_V = (('3S', 11.1), ('2S', 7.4))   # nominal pack voltage by cell count (3.7
 FLOOR_FRACTION = 0.08           # lowest steady rpm of a sensorless ESC as a fraction of the no-load rpm, ASSUMED (bench test required)
 
 # ---- numerical settings (not design decisions) -------------------------------------------------
+FIT_EPS = 1e-6                  # tolerance for 'fits exactly' tests (numerical setting)
 HYDRO_STRIPS = 3000             # hydrostatic strips
 HULL_STRIPS = 2000              # hull skin mass strips
 FILLET_STRIPS = 400             # strips along the skeg for the skeg root fillet volume

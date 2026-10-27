@@ -56,11 +56,39 @@ def hull_items(zd, rho=None):
     dw = 2 * (G.HT + outw(Xs))
     v = dw * dx * D.SKIN_T
     add('Deck (full width)', v.sum(), (v * Xs).sum(), (dw * dx).sum())
-    v = D.AFT_DECK_L * D.AFT_DECK_W * D.AFT_DECK_T
-    add('Aft deck over nozzles', v, v * (-D.AFT_DECK_L / 2), D.AFT_DECK_L * D.AFT_DECK_W)
-    ph = zd(D.LOA) - 2 * D.PUSH_PAD_INSET
-    v = D.BEAM * ph * D.PUSH_PAD_T
-    add('Bow push pad', v, v * (D.LOA - D.PUSH_PAD_T / 2), D.BEAM * ph)
+    plan = G.deck_plan()
+    if plan == 'rect':
+        # one rectangle AFT_DECK_W wide from the aft deck end to the bar aft face: the skin outside the hull outline (strips over the hull, then the strip ahead of the tip)
+        ow = np.maximum(D.AFT_DECK_W - dw, 0)
+        tail = D.AFT_DECK_W * (G.BUMPER_X0 - D.LOA)
+        a_ov = (ow * dx).sum() + tail
+        mom = ((ow * dx * D.SKIN_T) * Xs).sum() + tail * D.SKIN_T * (D.LOA + G.BUMPER_X0) / 2
+        add('Deck overhang skin (rectangular deck)', a_ov * D.SKIN_T, mom, a_ov)
+        brk = G.deck_brackets()
+        vb = [2 * b['L'] * D.FRAME_T * D.FRAME_RIB for b in brk]               # both sides, frame thickness by the frame top member width
+        if vb:
+            add('Deck brackets (frames extended), %d x 2' % len(brk), sum(vb), sum(v_ * b['x'] for v_, b in zip(vb, brk)), 0.0)
+    # aft deck: framed closed box (top skin, bottom skin, two longitudinal beams, transom beam, end beam), nozzle post bushings in the beams
+    ab = G.aft_box()
+    a_aft = G.aft_deck_area()
+    xa = -D.AFT_DECK_L / 2
+    add('Aft deck top skin', a_aft * D.AFT_DECK_T, a_aft * D.AFT_DECK_T * xa, a_aft)
+    add('Aft deck bottom skin', a_aft * G.AFT_SKIN_LOW_T, a_aft * G.AFT_SKIN_LOW_T * xa, a_aft)
+    sec = ab['w'] * ab['h']
+    vl = 2 * ab['long_len'] * sec
+    vt, ve = ab['transom_len'] * sec, ab['end_len'] * sec
+    add('Aft deck beams: 2 long, transom, end', vl + vt + ve, vl * (ab['long'][0] + ab['long'][1]) / 2 + vt * (ab['transom'][0] + ab['transom'][1]) / 2 + ve * (ab['end'][0] + ab['end'][1]) / 2, 0.0)
+    # push bar on the bow caps: balsa core and ply face (area counted once, front face), two ply mount arms
+    bz = G.bumper_z1(zd) - G.bumper_z0(zd)
+    plan_a = G.poly_area(G.bumper_plan())
+    xb = (G.BUMPER_X0 + G.BUMPER_X1) / 2
+    face = G.bumper_front_width() * bz
+    v_face = face * D.BUMPER_FACE_T
+    v_core = plan_a * bz - v_face
+    add('Push bar core, balsa (%.0f x %.0f x %.0f)' % (G.bumper_front_width(), bz, D.BUMPER_T - D.BUMPER_FACE_T), v_core, v_core * xb, face)
+    it.append(('Hull skin', 'Push bar face, ply %.1f mm' % D.BUMPER_FACE_T, v_face * D.PLY_RHO / 1000, G.BUMPER_X1 - D.BUMPER_FACE_T / 2))
+    arm = G.bumper_arms(zd)
+    it.append(('Hull skin', 'Push bar mount arms (2), ply, X %.0f to %.0f' % (arm['x0'], arm['x1']), 2 * arm['L'] * arm['w'] * arm['t'] * D.PLY_RHO / 1000, (arm['x0'] + arm['x1']) / 2))
     wa = float(outw(0) - inw(0))
     ta = 2 * (G.HT + float(inw(0)))
     v = (2 * wa * (zd(0) - 2 * T) + ta * (zd(0) - T - G.ROOF_Z1)) * T

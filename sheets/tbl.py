@@ -2,11 +2,11 @@ def table(sh,x0,y0,cols,rows,title=None,rh=4.6):
     if title: sh.text(x0,y0-3,title,'tb')
     x=x0
     for n,w in cols:
-        sh.rect(x,y0,w,rh,'thin','style="fill:#ececec"'); sh.text(x+1,y0+3.2,n,'tb'); x+=w
+        sh.rect(x,y0,w,rh,'thin','style="fill:#ececec"'); sh.text(x+1,y0+min(3.2,rh-0.6),n,'tb'); x+=w
     for i,r in enumerate(rows):
         x=x0; y=y0+rh+i*rh
         for (n,w),v in zip(cols,r):
-            sh.rect(x,y,w,rh,'thin'); sh.text(x+1,y+3.2,v,'t'); x+=w
+            sh.rect(x,y,w,rh,'thin'); sh.text(x+1,y+min(3.2,rh-0.6),v,'t'); x+=w
     return y0+rh*(len(rows)+1)
 
 

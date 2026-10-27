@@ -138,7 +138,7 @@ def build(r=None, alts=None):
     sh.add(f'<polygon points="{xi(xr):.1f},{zi(wl(xr)):.1f} {xi(xl):.1f},{zi(wl(xl)):.1f} {xi(xl):.1f},{zi(zbot):.1f} {xi(xr):.1f},{zi(zbot):.1f}" class="water" opacity=".5"/>')
     sh.poly(Pi([(xr, 0), (xl, 0), (xl, T), (xr, T)]), 'cut')
     sh.poly(Pi([(xr, zd(xr)), (xl, zd(xl)), (xl, zd(xl) - T), (xr, zd(xr) - T)]), 'cut')
-    sh.rect(xi(D.LOA), zi(zd(D.LOA) - D.PUSH_PAD_INSET), D.PUSH_PAD_T * si, (zd(D.LOA) - 2 * D.PUSH_PAD_INSET) * si, 'cut')
+    sh.rect(xi(G.BUMPER_X1), zi(G.bumper_z1(zd)), D.BUMPER_T * si, (G.bumper_z1(zd) - G.bumper_z0(zd)) * si, 'cut')
     sh.rect(xi(t1), zi(zd(t1) - T), (t1 - t0) * si, (zd(t1) - 2 * T) * si, 'hid')
     if hs and hs['kind'] == 'cap':
         sh.poly(Pi([(hs['x0'], zd(hs['x0'])), (hs['x1'], zd(hs['x1'])), (hs['x1'], hs['top'](hs['x1'])), (hs['x0'], hs['top'](hs['x0']))]), 'gray')

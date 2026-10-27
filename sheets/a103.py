@@ -93,5 +93,5 @@ def build(r=None):
     cols = [('MARK', 11), ('PANEL', 40), ('QTY', 8), ('LENGTH', 17), ('H OR W AFT', 24), ('H OR W FWD', 24), ('THICK', 13), ('AREA CM2', 17), ('PLANKS', 32), ('ANGLE AND NOTE', 222)]
     y0 = 137
     y = wtable(sh, 14, y0, cols, rows, None, step=2.9, pad=0.7, fills=fills)
-    sh.text(14, y + 3.8, 'PANEL SCHEDULE. Lengths are along the outer face; heights and widths at the two ends (trapezoids). Shaded rows are the trunk and the bow cap (carried as lumps in A-601). QTY counts both sponsons. Thickness: skin %.3f, aft deck %.3f, shoe %.2f, push pad %.0f.' % (T, D.AFT_DECK_T, D.SHOE_T, D.PUSH_PAD_T), 't')
+    sh.text(14, y + 3.8, 'PANEL SCHEDULE. Lengths are along the outer face; heights and widths at the two ends (trapezoids). Shaded rows are the trunk and the bow cap (carried as lumps in A-601). QTY counts both sponsons. Thickness: skin %.3f, aft deck skins %.3f, shoe %.2f, push bar %.0f. Deck plan: %s (AD and AB are the two skins of the aft deck box; beams and brackets are on A-502).' % (T, D.AFT_DECK_T, D.SHOE_T, D.BUMPER_T, G.deck_plan()), 't')
     return sh

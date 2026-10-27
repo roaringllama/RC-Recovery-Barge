@@ -47,7 +47,7 @@ Requires Python 3 with numpy, scipy, Pillow, Playwright (Chromium already instal
 
 `build.py` prints the checks report and continues even when checks fail. It writes to `out/`:
 
-- `RC_Recovery_Cat_Drawings_<REV>.pdf` (REV is `design.REV`, now v9.2) and `p1.png` to `p11.png` (A-000 twice, A-101, A-103, A-104, A-301, A-401, A-501, A-502, A-503, A-601). Every sheet title block carries `design.REV`.
+- `RC_Recovery_Cat_Drawings_<REV>.pdf` (REV is `design.REV`, now v9.3) and `p1.png` to `p11.png` (A-000 twice, A-101, A-103, A-104, A-301, A-401, A-501, A-502, A-503, A-601). Every sheet title block carries `design.REV`.
 - `RC_Recovery_Cat_Build_List_v6.xlsx`, the build list workbook (parts with live formulas, channel plan, cooling plan, references)
 - `blade_sweep.csv`, the blade variant sweep at the design battery position (475) and the first alternate (520)
 - `checks.txt`, the checks report
@@ -64,7 +64,7 @@ Requires Python 3 with numpy, scipy, Pillow, Playwright (Chromium already instal
 
 - `RC_Recovery_Barge_<REV>.step`: the whole assembly with named, colored parts (`<group>__<part>`)
 - `RC_Recovery_Barge_<REV>.glb`: the same assembly as glTF binary, per-part names kept
-- `<group>_<REV>.stl`: one STL per group: hull, deck, caps, skegs_shoes, nozzles_props, blades, blades_stowed, push_pad, electronics, water
+- `<group>_<REV>.stl`: one STL per group: hull, deck, caps, skegs_shoes, nozzles_props, blades, blades_stowed, bumper, electronics, water
 - `manifest.json`: each group with its parts, volume (cm3), bounding box (mm) and material tag
 - `render_info.json`: REV, weight, stern and bow draft, water over the nozzle top and the margin after the trough (read by the viewer)
 - `still_bow|stern|profile|under_<REV>.png`: the four viewer presets, blades down, water on
@@ -83,6 +83,8 @@ The combined PDF keeps the name `RC_Recovery_Cat_Drawings_<REV>.pdf`. Issued PDF
 The battery design position is 475 (APPROVED); the deck is built parallel to the waterline there. 520 and 590 stay in the trim table as alternate positions on that deck. A-601 also shows a balsa density sensitivity (`BALSA_RHO` and `BALSA_RHO_HI`, 10 lb/ft3): total weight and water over the nozzle top at both.
 
 Checks 15 to 18 (v9.1): 15 hatch flanges against the part of the blade trunk that is open through the deck; 16 every item lifts out through its hatch (plan footprint inside the opening; the battery is tested at its service position `BAT_SERVICE_X`, 505, where it is slid before lift-out, and the report gives the slide range it must be moved from); 17 a nozzle turned about its post, swept 0 to 90 deg, stays inside the aft deck outline by at least 5 mm; 18 the nozzle post length required (about 95 mm), cut from 3 mm rod and 3 mm bore tube stock (300 mm). A failing check is reported, never tuned away.
+
+Checks 22 and 23 (v9.3): 22 aft deck cantilever (1000 g at the aft edge on two 19.05 x 6.35 balsa beams, margin and deflection reported, fails under margin 2); 23 the raised push bar (BUMPER_*, bottom `BUMPER_WL_CLR` above the waterline, deck level at the top) is out of the water at every battery position and ahead of everything submerged. `DECK_PLAN` in `design.py` selects `rect` (default, PENDING) or `taper`; build.py prints both plans and A-601 tabulates them.
 
 Checks 19 to 21 (v9.2): 19 the blade tip, extended or stowed, stays `TRUNK_TIP_CLR` (5) short of the trunk end; 20 the blade servo (DS3225 on its side, 40 x 20 x 40.5) fits in the bow cap and the servo bay X 600 to 650, outboard of the blade plane, with the lift line (`LINE_R` 200 from the hinge) straight up the open trunk to the spool; 21 the solid frames and the cap ribs clear the equipment. Check 21 currently fails and is reported (the F5 tunnel piece against the receiver and hatch HC, the F7 cap rib against the servo and the line).
 

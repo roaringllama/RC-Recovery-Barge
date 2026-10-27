@@ -95,9 +95,21 @@ def panels(zd):
     out.append(_P('DC', 'Center deck', 1, 'center', 'plate', D.LOA, cw(0), cw(D.LOA), acen, cw(0), 'between the inner walls; hatch openings not deducted'))
     ht = zd(0) - T - G.ROOF_Z1
     out.append(_P('TT', 'Tunnel-top transom', 1, 'center', 'wall', cw(0), ht, ht, cw(0) * ht, ht, 'closes the center cavity aft'))
-    out.append(_P('AD', 'Aft deck', 1, 'aft', 'plate', D.AFT_DECK_W, D.AFT_DECK_L, D.AFT_DECK_L, D.AFT_DECK_L * D.AFT_DECK_W, D.AFT_DECK_L, 'over the nozzles; post bushings', t=D.AFT_DECK_T))
-    ph = zd(D.LOA) - 2 * D.PUSH_PAD_INSET
-    out.append(_P('BP', 'Bow push pad', 1, 'bow', 'plate', D.BEAM, ph, ph, D.BEAM * ph, ph, 'full bow face, glassed', t=D.PUSH_PAD_T))
+    plan = G.deck_plan()
+    a_aft = G.aft_deck_area()
+    wmax = D.AFT_DECK_W
+    pn = 'rect plan, %.0f wide' % wmax if plan == 'rect' else 'taper plan, edges chamfered in to Y %.1f over the last %.0f' % (D.BEAM / 2, D.AFT_CHAMFER_L)
+    out.append(_P('AD', 'Aft deck top skin', 1, 'aft', 'plate', wmax, D.AFT_DECK_L, D.AFT_DECK_L, a_aft, D.AFT_DECK_L, 'closed box top, over the nozzles, %s; post holes through the beams' % pn, t=D.AFT_DECK_T))
+    out.append(_P('AB', 'Aft deck bottom skin', 1, 'aft', 'plate', wmax, D.AFT_DECK_L, D.AFT_DECK_L, a_aft, D.AFT_DECK_L, 'box bottom, underside %.1f below the deck top; post holes' % D.AFT_DECK_DEPTH, t=G.AFT_SKIN_LOW_T))
+    if plan == 'rect':
+        ow = G.overhang_area()
+        ovw = (D.AFT_DECK_W - D.BEAM) / 2
+        out.append(_P('DO', 'Deck overhang skin', 1, 'deck', 'plate', G.BUMPER_X0, ow / G.BUMPER_X0, ow / G.BUMPER_X0, ow, ovw, 'strips outside the hull outline, %.2f wide at the straight sides, plus the strip ahead of the tip; on the deck brackets (A-502)' % ovw))
+    bz = G.bumper_z1(zd) - G.bumper_z0(zd)
+    out.append(_P('BP', 'Push bar', 1, 'bow', 'plate', G.bumper_front_width(), bz, bz, G.bumper_front_width() * bz, bz,
+                  'X %.0f to %.0f, Z %.1f to %.1f (%.0f above the waterline), balsa core with a %.1f ply face; %s' % (
+                      G.BUMPER_X0, G.BUMPER_X1, G.bumper_z0(zd), G.bumper_z1(zd), D.BUMPER_WL_CLR, D.BUMPER_FACE_T,
+                      'front %.0f wide, ends chamfered %.0f deg' % (G.bumper_front_width(), D.BUMPER_CHAMFER_DEG) if plan == 'taper' else 'full deck width'), t=D.BUMPER_T))
     sk = G.SKEG_X0
     drop = -G.SHOE_BOT
     out.append(_P('SK', 'Skeg side plate', 2 * BOTH, 'skeg', 'triangle', sk, drop, 0.0, G.SKEG_TRI_AREA, drop, 'right triangle, legs %.2f along the bottom and %.2f at the transom, edge %.2f at %.2f deg' % (sk, drop, math.hypot(sk, drop), G.SKEG_BOT_DEG)))
@@ -270,6 +282,22 @@ def supports(zd):
     return out, rail_l
 
 
+def deck_frame_rows(zd):
+    """Rows for the aft deck box, the deck brackets (rect plan) and the push bar mount arms: (mark, part, qty, size text), terse for a narrow table."""
+    ab = G.aft_box()
+    sec = '%.2f x %.2f' % (ab['w'], ab['h'])
+    rows = [('ALB', 'Aft beam, long, at Y +/- %.1f, post bushing' % G.YS, str(BOTH), '%.1f x %s' % (ab['long_len'], sec)),
+            ('ATB', 'Aft beam, transom', '1', '%.1f x %s' % (ab['transom_len'], sec)),
+            ('AEB', 'Aft beam, aft edge', '1', '%.1f x %s' % (ab['end_len'], sec))]
+    brk = G.deck_brackets()
+    if brk:
+        rows.append(('DBK', 'Deck bracket, frame extended, F1 to F%d' % len(D.FRAME_X), str(BOTH * len(brk)),
+                     '%.1f to %.1f x %.3f x %.1f deep' % (min(b['L'] for b in brk), max(b['L'] for b in brk), D.FRAME_T, D.FRAME_RIB)))
+    arm = G.bumper_arms(zd)
+    rows.append(('BA', 'Push bar arm, ply, cap plate to bar', str(BOTH), '%.1f x %.1f x %.3f' % (arm['L'], arm['w'], arm['t'])))
+    return rows
+
+
 def mount_dims():
     xa, xb = G.MOUNT[0][0], G.MOUNT[1][0]
     h_aft = G.MOUNT[-1][1] - G.MOUNT[0][1]
@@ -416,7 +444,7 @@ def sealing(zd):
          'bench test: lid under %.0f mm of water for %.0f min; fill test before every run' % (D.HATCH_TEST_DEPTH, D.HATCH_TEST_MIN)),
         ('S2', 'Stern tubes (2), %.1f mm OD' % D.TUBE_OD, 'transom, Z %.0f; enters the hull through the floor at X %.1f' % (D.PROP_Z, G.KEEL_X),
          'transom stuffing seal %.0f long x %.0f OD, tube epoxied into the skeg core and the floor slot; no seal inside the hull' % (D.SEAL_L, D.SEAL_OD), 'dye test at the floor slot; check for drip after each run'),
-        ('S3', 'Steering posts (2), %.1f mm' % D.NOZ_POST_D, 'aft deck, X %.1f' % G.POSTX, 'bushings in the aft deck, outside the hull; no hull seal', 'check free turning over the full travel (%.0f deg each side)' % D.STEER_TRAVEL_DEG),
+        ('S3', 'Steering posts (2), %.1f mm' % D.NOZ_POST_D, 'aft deck, X %.1f' % G.POSTX, 'bushings in the aft deck beams, outside the hull; no hull seal', 'check free turning over the full travel (%.0f deg each side)' % D.STEER_TRAVEL_DEG),
         ('S4', 'Steering pushrod', 'route not designed; servo at X %.0f to %.0f' % (D.STEER_SERVO['x0'], D.STEER_SERVO['x0'] + D.STEER_SERVO['l']),
          'rubber bellows if the rod leaves the hull (size %s)' % ('PENDING' if D.PUSHROD_BELLOWS_D is None else '%.1f' % D.PUSHROD_BELLOWS_D), 'cycle full travel, then fill-test'),
         ('S5', 'Blade trunks (2), X %.0f to %.0f' % (tx0, tx1), 'open to the water at the bottom and through the deck into the bow cap',
@@ -426,7 +454,13 @@ def sealing(zd):
         ('S8', 'Wires through BH1 and BH2', 'bulkheads at X %.1f and %.1f' % G.BH, 'epoxy-potted feedthrough, one per sponson per bulkhead', 'fill-test each compartment'),
         ('S9', 'Water jacket plumbing (2 pickups, 2 outlets)', 'pickup X %s, outlet X %s' % ('PENDING' if D.COOL_PICKUP_X is None else '%.0f' % D.COOL_PICKUP_X, 'PENDING' if D.COOL_OUTLET_X is None else '%.0f' % D.COOL_OUTLET_X),
          'M5 pickup and M6 outlet nipples through the skin, epoxied; sealed loop inside', 'inspect fittings; check the pickup is below the waterline'),
-        ('S10', 'Transom closures, tip face, bow pad', 'X 0 and X %.0f' % D.LOA, 'epoxy fillet all round, glass over', 'fill-test'),
+        ('S10', 'Transom closures, tip face', 'X 0 and X %.0f' % D.LOA, 'epoxy fillet all round, glass over', 'fill-test'),
+        ('S11', 'Aft deck box (closed, %.1f deep)' % D.AFT_DECK_DEPTH, 'aft deck, X %.1f to 0, above the waterline' % -D.AFT_DECK_L,
+         'bottom skin glued to the beams and the transom beam, glass seal coat inside, then the top skin; the two nozzle post bushings (%.0f mm posts) epoxied through the bottom skin and the beam, no other hole' % D.NOZ_POST_D,
+         'inspect the seal coat before the top skin goes on; shake and tap test, no loose beam'),
+        ('S12', 'Push bar mounts (2 ply arms)', 'bow caps, forward end plate X %.0f to the bar aft face X %.0f' % (G.bumper_arm_x0(zd), G.BUMPER_X0),
+         'ply arms epoxied to the cap forward end plate and to the deck top; bar glued to the arm ends with an epoxy fillet; glass over; nothing goes through the deck',
+         'hand push on the bar with the boat on the bench, no creak or movement; bar bottom stays %.0f above the waterline' % D.BUMPER_WL_CLR),
     ]
     return rows
 

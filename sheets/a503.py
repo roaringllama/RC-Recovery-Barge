@@ -24,16 +24,17 @@ def build(r=None):
     s = 1 / 4
     ox = 22
     xs = lambda X: ox + s * (D.LOA - X)
-    oy = 68
+    oy = 70
     ys = lambda Y: oy - s * Y
     P = lambda pts: [(xs(x), ys(y)) for x, y in pts]
-    sh.text(14, 33, 'DECK PLAN, 1:4 (bow at left). Lids at flange size, openings dashed, latch screws dotted.', 'tb')
+    sh.text(14, 30, 'DECK PLAN, 1:4 (bow at left). Lids at flange size, openings dashed, latch screws dotted.', 'tb')
     for sg in (1, -1):
         sh.poly(P([(x, sg * y) for x, y in S.OUTER] + [(x, sg * y) for x, y in reversed(S.INNER)]), 'obj', 'style="fill:#fff"')
     sh.rect(xs(D.LOA), ys(G.HT), D.LOA * s, 2 * G.HT * s, 'thin')
-    sh.rect(xs(0), ys(D.AFT_DECK_W / 2), D.AFT_DECK_L * s * -1 + 0, D.AFT_DECK_W * s, 'thin') if False else None
-    sh.rect(xs(0) + 0, ys(D.AFT_DECK_W / 2), D.AFT_DECK_L * s, D.AFT_DECK_W * s, 'thin')
+    sh.poly(P(G.deck_outline()), 'thin', 'style="fill:none"')                       # deck outline of the chosen plan (DECK_PLAN)
+    sh.poly(P(G.bumper_plan()), 'cut')
     sh.text(xs(0) + D.AFT_DECK_L * s / 2, ys(0) + 1, 'aft deck', 'ts', 'middle')
+    sh.text(255, 78, 'DECK PLAN %s: outline %.0f wide, bar X %.0f to %.0f. The hatches are unchanged.' % (G.deck_plan(), D.AFT_DECK_W if G.deck_plan() == 'rect' else D.BEAM, G.BUMPER_X0, G.BUMPER_X1), 'ts')
     for h in G.hatch_rects(flange=True):
         sh.rect(xs(h['x1']), ys(h['y1']), (h['x1'] - h['x0']) * s, (h['y1'] - h['y0']) * s, 'obj', 'style="fill:#f4f4f4"')
     se_ = S.hatch_seal()

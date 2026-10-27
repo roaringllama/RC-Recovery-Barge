@@ -41,6 +41,33 @@ def use(base, overrides=None, name=None):
             del D.BLADE_VARIANTS[name]
 
 
+@contextmanager
+def deck_plan(plan):
+    """Model context for one deck plan ('rect' or 'taper'): installs D.DECK_PLAN and restores it on exit. Nothing in design.py is changed on disk."""
+    G.deck_plan(plan)
+    saved = D.DECK_PLAN
+    D.DECK_PLAN = plan
+    try:
+        yield plan
+    finally:
+        D.DECK_PLAN = saved
+
+
+def plan_rows():
+    """One row per deck plan (D.DECK_PLANS) at the design battery position: weight, LCG, drafts, trim, water over the nozzle, aft deck beam margin,
+    deck skin area, the failed checks, and the hydro result and results themselves."""
+    rows = []
+    for p in D.DECK_PLANS:
+        with deck_plan(p):
+            r = hydro.design()
+            res = checks.run_all(r)
+            k = G.aft_cantilever()
+            rows.append(dict(plan=p, W=r['W'], G=r['G'], d0=r['d0'], bow=r['bow'], trim=r['trim'], over=r['over'], margin=r['over'] - D.TROUGH,
+                             beam_margin=k['margin'], deflection=k['defl'], bar_width=G.bumper_front_width(), deck_area=G.hull_deck_area() + G.overhang_area() + G.aft_deck_area(),
+                             failed=[n.split()[0] for n, ok, _ in res if not ok], r=r, results=res))
+    return rows
+
+
 def failed(results):
     """Names (numbers) of failed checks; a warning-only failure is marked (warn)."""
     out = []

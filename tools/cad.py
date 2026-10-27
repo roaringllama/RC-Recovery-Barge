@@ -6,7 +6,7 @@ Every dimension comes from the model; the few render-only values (propeller blad
     python3 -m tools.cad            # writes out/cad/*.step, *.stl, *.glb, manifest.json, render_info.json
 
 Part groups (name prefix before the double underscore of every part): hull, deck, caps, skegs_shoes, nozzles_props, blades, blades_stowed,
-push_pad, electronics, water.
+bumper, electronics, water.
 """
 import json
 import math
@@ -23,13 +23,14 @@ from model import geometry as G, hydro
 
 OUT_DIR = os.path.join(ROOT, 'out', 'cad')
 SEP = '__'
-GROUPS = ('hull', 'deck', 'caps', 'skegs_shoes', 'nozzles_props', 'blades', 'blades_stowed', 'push_pad', 'electronics', 'water')
+GROUPS = ('hull', 'deck', 'caps', 'skegs_shoes', 'nozzles_props', 'blades', 'blades_stowed', 'bumper', 'electronics', 'water')
 
 # material tag -> (rgb, alpha); the viewer re-materials by tag, these are the glTF fallbacks
 MATERIALS = {
     'balsa_clearcoat': ((0.80, 0.62, 0.38), 1.0),
     'dark_matte': ((0.10, 0.10, 0.11), 1.0),
     'brass': ((0.78, 0.60, 0.22), 1.0),
+    'ply': ((0.62, 0.45, 0.26), 1.0),
     'g10_green': ((0.07, 0.25, 0.14), 1.0),
     'battery_grey': ((0.25, 0.26, 0.28), 1.0),
     'esc_blue': ((0.10, 0.30, 0.75), 1.0),
@@ -226,13 +227,44 @@ def build(r=None):
     add('hull', 'tunnel_roof', roof, 'balsa_clearcoat')
     cdeck = _prism(tp, 0.0, BIG).intersect(_wedge(lambda X: zd(X) - T, lambda X: zd(X), 0.0, D.LOA, HALF))
     add('deck', 'center_deck', cdeck, 'balsa_clearcoat')
-    ad = [(-D.AFT_DECK_L, -D.AFT_DECK_W / 2), (0, -D.AFT_DECK_W / 2), (0, D.AFT_DECK_W / 2), (-D.AFT_DECK_L, D.AFT_DECK_W / 2)]
-    add('deck', 'aft_deck', _prism(ad, 0.0, BIG).intersect(_wedge(lambda X: zd(X) - D.AFT_DECK_T, lambda X: zd(X), -D.AFT_DECK_L, 0.0, HALF)), 'balsa_clearcoat')
+    # deck plan: aft deck as a closed box (top skin, bottom skin, two long beams, transom beam, end beam), then for the rectangular plan the overhang skin and the brackets
+    slab = lambda pts, f_lo, f_hi, x0, x1: _prism(pts, 0.0, BIG).intersect(_wedge(f_lo, f_hi, x0, x1, HALF))
+    L = D.AFT_DECK_L
+    adp = G.aft_deck_outline()
+    f_top = lambda X: zd(X) - D.AFT_DECK_T
+    f_bot = lambda X: zd(X) - D.AFT_DECK_DEPTH
+    add('deck', 'aft_deck_top', slab(adp, f_top, zd, -L, 0.0), 'balsa_clearcoat')
+    add('deck', 'aft_deck_bottom', slab(adp, f_bot, lambda X: zd(X) - D.AFT_DECK_DEPTH + G.AFT_SKIN_LOW_T, -L, 0.0), 'balsa_clearcoat')
+    ab = G.aft_box()
+    g_lo, g_hi = (lambda X: zd(X) - D.AFT_DECK_DEPTH + G.AFT_SKIN_LOW_T), f_top
+    rect = lambda x0, x1, y0, y1: [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
+    inside = _prism(adp, 0.0, BIG)
+    lb = slab(rect(*ab['long'][:2], *ab['long'][2:]), g_lo, g_hi, ab['long'][0], ab['long'][1])
+    add('deck', 'aft_beam_port', lb, 'balsa_clearcoat')
+    add('deck', 'aft_beam_stbd', _mirror(lb), 'balsa_clearcoat')
+    for nm, key in (('aft_beam_transom', 'transom'), ('aft_beam_end', 'end')):
+        x0, x1, y0, y1 = ab[key]
+        add('deck', nm, slab(rect(x0, x1, y0, y1), g_lo, g_hi, x0, x1).intersect(inside), 'balsa_clearcoat')
+    if G.deck_plan() == 'rect':
+        hw, F = D.AFT_DECK_W / 2, G.BUMPER_X0
+        ov = slab(rect(0.0, F, -hw, hw), f_top, zd, 0.0, F).cut(deck_skin).cut(_mirror(deck_skin)).cut(cdeck)
+        add('deck', 'deck_overhang', ov, 'balsa_clearcoat')
+        for i, b in enumerate(G.deck_brackets(), 1):
+            t2 = D.FRAME_T / 2
+            br = slab(rect(b['x'] - t2, b['x'] + t2, b['y0'], b['y1']), lambda X: zd(X) - D.AFT_DECK_T - D.FRAME_RIB, f_top, b['x'] - t2, b['x'] + t2)
+            add('deck', 'bracket_x%03d_port' % b['x'], br, 'balsa_clearcoat')
+            add('deck', 'bracket_x%03d_stbd' % b['x'], _mirror(br), 'balsa_clearcoat')
 
-    # push pad, full bow face
-    pp = cq.Workplane('XY').box(D.PUSH_PAD_T, D.BEAM, zd(D.LOA) - 2 * D.PUSH_PAD_INSET, centered=False).translate(
-        (D.LOA - D.PUSH_PAD_T, -D.BEAM / 2, D.PUSH_PAD_INSET))
-    add('push_pad', 'push_pad', pp, 'balsa_clearcoat')
+    # push bar on the bow caps: balsa core and ply face, two ply mount arms on the deck top
+    bz0, bz1 = G.bumper_z0(zd), G.bumper_z1(zd)
+    bar = _prism(G.bumper_plan(), bz0, bz1)
+    face = bar.intersect(cq.Workplane('XY').box(D.BUMPER_FACE_T, 4 * D.BEAM, bz1 - bz0, centered=False).translate((G.BUMPER_X1 - D.BUMPER_FACE_T, -2 * D.BEAM, bz0)))
+    add('bumper', 'bar_core', bar.cut(face), 'balsa_clearcoat')
+    add('bumper', 'bar_face', face, 'ply')
+    am = G.bumper_arms(zd)
+    arm = cq.Workplane('XY').box(am['L'], am['w'], am['t'], centered=False).translate((am['x0'], am['y'] - am['w'] / 2, am['z0']))
+    add('bumper', 'arm_port', arm, 'ply')
+    add('bumper', 'arm_stbd', _mirror(arm), 'ply')
 
     # bow caps
     hz = G.housing(zd)

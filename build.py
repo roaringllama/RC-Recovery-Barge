@@ -65,8 +65,12 @@ def main():
     print('CAP X %.1f to %.1f, top Z %.1f (%s governs: stowed blade top %.1f, servo top %.1f), %.1f above the deck at the aft end, %.1f at the bow end' % (
         hz['x0'], hz['x1'], hz['ztop'], hz['governs'], hz['z_blade'], hz['z_servo'], hz['h0'], hz['h1']))
 
+    plans = variants.plan_rows()
+    for q in plans:
+        print('DECK PLAN %s%s: %.1f g, LCG %.1f, stern draft %.2f, bow draft %.2f, trim %.3f deg bow down, over nozzle top %.1f, aft deck beam margin %.2f (deflection %.2f mm), checks failed: %s' % (
+            q['plan'], ' (default)' if q['plan'] == D.DECK_PLAN else '', q['W'], q['G'], q['d0'], q['bow'], -q['trim'], q['over'], q['beam_margin'], q['deflection'], ', '.join(q['failed']) or 'none'))
     body = [a101.build(r, alts), a103.build(r), a104.build(r), a301.build(r, alts), a401.build(r, alts), a501.build(r),
-            a502.build(r), a503.build(r), a601.build(r, alts, results, srows)]
+            a502.build(r), a503.build(r), a601.build(r, alts, results, srows, plans)]
     index = [a000.SELF + (a000.CONTENTS,)] + [(sh.no, sh.title, sh.scale, sh.sub) for sh in body]
     sheets = a000.build(r, index) + body
     pdf = os.path.join(OUT, 'RC_Recovery_Cat_Drawings_%s.pdf' % D.REV)

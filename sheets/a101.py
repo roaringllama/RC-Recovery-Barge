@@ -31,8 +31,17 @@ def build(r=None, alts=None):
         if h['yc'] >= 0:
             for X in (h['x0'], h['x1']):
                 sh.line(xs(X), zs(zd(X)) - 1.6, xs(X), zs(zd(X) - T) + 1.6, 'thin')
-    sh.rect(xs(D.LOA), zs(zd(D.LOA) - D.PUSH_PAD_INSET), D.PUSH_PAD_T * s, (zd(D.LOA) - 2 * D.PUSH_PAD_INSET) * s, 'cut')
-    sh.poly(P([(0, zd(0)), (-D.AFT_DECK_L, zd(-D.AFT_DECK_L)), (-D.AFT_DECK_L, zd(-D.AFT_DECK_L) - D.AFT_DECK_T), (0, zd(0) - D.AFT_DECK_T)]), 'cut')
+    # push bar on the bow caps (balsa core, ply face on the front), mount arm on the deck top (behind the section plane), aft deck box (section through the beam at Y = YS)
+    bz0, bz1 = G.bumper_z0(zd), G.bumper_z1(zd)
+    am = G.bumper_arms(zd)
+    sh.rect(xs(am['x1']), zs(am['z1']), am['L'] * s, am['t'] * s, 'gray')
+    sh.rect(xs(G.BUMPER_X1), zs(bz1), D.BUMPER_T * s, (bz1 - bz0) * s, 'cut')
+    sh.rect(xs(G.BUMPER_X1), zs(bz1), D.BUMPER_FACE_T * s, (bz1 - bz0) * s, 'thk')
+    sh.dimv(zs(wl(D.LOA)), zs(bz0), xs(G.BUMPER_X1) - 4, '%.0f' % D.BUMPER_WL_CLR, xs(G.BUMPER_X1), xs(G.BUMPER_X1))
+    Ld = D.AFT_DECK_L
+    sh.poly(P([(0, zd(0)), (-Ld, zd(-Ld)), (-Ld, zd(-Ld) - D.AFT_DECK_T), (0, zd(0) - D.AFT_DECK_T)]), 'cut')
+    sh.poly(P([(0, zd(0) - D.AFT_DECK_DEPTH + G.AFT_SKIN_LOW_T), (-Ld, zd(-Ld) - D.AFT_DECK_DEPTH + G.AFT_SKIN_LOW_T), (-Ld, zd(-Ld) - D.AFT_DECK_DEPTH), (0, zd(0) - D.AFT_DECK_DEPTH)]), 'cut')
+    sh.poly(P([(0, zd(0) - D.AFT_DECK_T), (-Ld, zd(-Ld) - D.AFT_DECK_T), (-Ld, zd(-Ld) - D.AFT_DECK_DEPTH + G.AFT_SKIN_LOW_T), (0, zd(0) - D.AFT_DECK_DEPTH + G.AFT_SKIN_LOW_T)]), 'cut', 'style="fill:#f1e3c8"')
     # skeg and shoe (near side)
     sh.poly(P(G.SKEG), 'gray'); sh.poly(P(G.SHOE), 'gray')
     # stern tube level, shaft angled, CV joint
@@ -87,7 +96,7 @@ def build(r=None, alts=None):
 
     def tg(n, X, Z, dx=0, dz=10):
         sh.tag(xs(X) + dx, zs(Z + dz), n); sh.leader(xs(X) + dx, zs(Z + dz) + (2.3 if dz > 0 else -2.3), xs(X), zs(Z))
-    tg(1, D.LOA - D.PUSH_PAD_T / 2, 30, 0, 40)
+    tg(1, (G.BUMPER_X0 + G.BUMPER_X1) / 2, bz0, 0, -22)
     tg(2, 560, zd(560), 0, 14)
     tg(3, D.ESC['x0'] + D.ESC['l'] / 2, G.esc_boxes()[0][5], 0, 22)
     tg(4, D.DESIGN_BAT_X, b0[4], 0, -34)
@@ -172,17 +181,32 @@ def build(r=None, alts=None):
         sh.rect(xs(bb.x1), ys(bb.y1), (bb.x1 - bb.x0) * s, (bb.y1 - bb.y0) * s, 'elec')
         sh.text(xs((bb.x0 + bb.x1) / 2), ys((bb.y0 + bb.y1) / 2) + 0.8, 'servo', 'ts', 'middle')
         sh.circ(xs(G.line_x()), ys(G.blade_y()), 0.9, 'obj', 'style="fill:#fff"')
-    sh.rect(xs(0), ys(D.AFT_DECK_W / 2), D.AFT_DECK_L * s, D.AFT_DECK_W * s, 'thin', 'style="fill:none"')
-    sh.rect(xs(D.LOA), ys(D.BEAM / 2), D.PUSH_PAD_T * s, D.BEAM * s, 'cut')
-    sh.dimh(xs(D.LOA), xs(-D.AFT_DECK_L), ys(-D.AFT_DECK_W / 2) + 4, '%.1f overall = %.0f hull + %.1f aft deck' % (D.LOA + D.AFT_DECK_L, D.LOA, D.AFT_DECK_L), ys(-D.AFT_DECK_W / 2) + 1, ys(-D.AFT_DECK_W / 2) + 1)
+    # deck outline of the chosen plan (the deck itself is removed in this view), aft deck beams, push bar and its mount arms
+    sh.poly(Pp(G.deck_outline()), 'thin', 'style="fill:none"')
+    ab = G.aft_box()
+    for sg in (1, -1):
+        x0_, x1_, y0_, y1_ = ab['long']
+        sh.rect(xs(x1_), ys(sg * y1_ if sg > 0 else -y0_), (x1_ - x0_) * s, (y1_ - y0_) * s, 'hid')
+    for key in ('transom', 'end'):
+        x0_, x1_, y0_, y1_ = ab[key]
+        sh.rect(xs(x1_), ys(y1_), (x1_ - x0_) * s, (y1_ - y0_) * s, 'hid')
+    for sg in (1, -1):
+        sh.rect(xs(G.BUMPER_X0), ys(sg * G.BUMPER_ARM_Y + D.BUMPER_ARM_W / 2), am['L'] * s, D.BUMPER_ARM_W * s, 'gray')
+    sh.poly(Pp(G.bumper_plan()), 'cut')
+    for b in G.deck_brackets():
+        for sg in (1, -1):
+            sh.rect(xs(b['x'] + D.FRAME_T / 2), ys(b['y1'] if sg > 0 else -b['y0']), D.FRAME_T * s, b['L'] * s, 'gray')
+    sh.text(xs(-D.AFT_DECK_L / 2), ys(-D.AFT_DECK_W / 2) - 2, 'deck plan: %s' % G.deck_plan(), 'tb', 'middle')
+    sh.dimh(xs(G.BUMPER_X1), xs(-D.AFT_DECK_L), ys(-D.AFT_DECK_W / 2) + 4, '%.1f overall = %.0f hull + %.0f bar projection + %.1f aft deck' % (D.LOA + D.BUMPER_PROJ + D.AFT_DECK_L, D.LOA, D.BUMPER_PROJ, D.AFT_DECK_L), ys(-D.AFT_DECK_W / 2) + 1, ys(-D.AFT_DECK_W / 2) + 1)
     sh.dimv(ys(D.BEAM / 2), ys(-D.BEAM / 2), 27, '%.0f' % D.BEAM, xs(D.LOA), xs(D.LOA))
+    sh.dimv(ys(D.AFT_DECK_W / 2), ys(-D.AFT_DECK_W / 2), xs(-D.AFT_DECK_L) + 6, '%.0f' % D.AFT_DECK_W, xs(-D.AFT_DECK_L), xs(-D.AFT_DECK_L))
     sh.dimv(ys(G.HT + D.SPONSON_W), ys(G.HT), xs(410), '%.2f' % D.SPONSON_W, xs(410), xs(410))
     sh.dimv(ys(G.HT), ys(-G.HT), xs(410), '%.1f' % D.TUNNEL_W, xs(410), xs(410))
     sh.text(36, 29.5, 'PROFILE, SECTION ON THE SPONSON CENTERLINE (Y = %.1f), LOOKING PORT' % G.YS, 'tb')
     sh.text(110, 145.3, 'PLAN, DECK REMOVED', 'tb')
     # key
     X0 = 352
-    keys = ['1  Push pad, full bow face, %.0f mm balsa' % D.PUSH_PAD_T,
+    keys = ['1  Push bar, X %.0f to %.0f, Z %.1f to %.1f (%.0f above the waterline), on two ply arms to the bow caps' % (G.BUMPER_X0, G.BUMPER_X1, bz0, bz1, D.BUMPER_WL_CLR),
             '2  Deck parallel to the waterline, %.0f freeboard' % D.FREEBOARD,
             '3  ESC (2) on the tunnel roof, X %.0f to %.0f' % (D.ESC['x0'], D.ESC['x0'] + D.ESC['l']),
             '4  Battery on slide, center X %.0f to %.0f, design %.0f, %.0f outboard (Y %.1f), hatch HB' % (D.BAT_SLIDE[0], D.BAT_SLIDE[1], D.DESIGN_BAT_X, D.BAT_Y_OFFSET, G.BAT_YC),
@@ -194,7 +218,7 @@ def build(r=None, alts=None):
             '10 Steering post %.0f mm in the aft deck bushing, %.1f long, cut from %.0f mm rod and tube stock (check 18)' % (D.NOZ_POST_D, G.post_required_length(zd), D.NOZ_POST_STOCK_L),
             '11 Steering servo DS3225 on its side on the roof, %.0f high, %.0f x %.1f footprint, hatch HS' % (D.STEER_SERVO['h'], D.STEER_SERVO['l'], D.STEER_SERVO['w']),
             '12 Receiver on the tunnel roof, X %.0f to %.0f, hatch HC' % (D.RX['x0'], D.RX['x0'] + D.RX['l']),
-            '13 Aft deck over nozzles, %.1f x %.0f' % (D.AFT_DECK_L, D.AFT_DECK_W),
+            '13 Aft deck box over nozzles, %.1f x %.0f, %.1f deep (A-502)' % (D.AFT_DECK_L, D.AFT_DECK_W, D.AFT_DECK_DEPTH),
             ('14 Blade tower %.0f x %.0f x %.0f over the trunk' % (D.TOWER_L, D.TOWER_W, D.TOWER_H)) if hs and hs['kind'] == 'tower' else '14 Bow cap, X %.0f to %.0f, top Z %.1f, %.1f above the deck at the aft end' % (ux0, ux1, hs['ztop'], hs['h0']),
             '15 Tunnel roof plate, Z %.1f to %.1f' % (D.ROOF_Z0, G.ROOF_Z1),
             ('16 Blade servo DS3225 on its side in the bow cap, X %.0f to %.0f, Y %.1f to %.1f, on a shelf at Z %.1f; spool at X %.0f; lift line from the blade upper edge %.0f from the hinge' % (

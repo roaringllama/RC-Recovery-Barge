@@ -1,6 +1,6 @@
 """Interference and fit checks. Each check takes the design hydro result and returns (name, pass_bool, message).
 
-Checks 1 to 10 are the required set. 9b and 11 to 21 are additions. Check 6 is a warning, not a failure.
+Checks 1 to 10 are the required set. 9b and 11 to 23 are additions. Check 6 is a warning, not a failure.
 Nothing here alters a design value; failures are reported only.
 """
 import math
@@ -160,14 +160,14 @@ def c9b(r):
 
 def c10(r):
     xa = G.NOZ_XA
-    plan_x = -xa <= D.AFT_DECK_L
+    m0 = G.nozzle_margins(0)
     ymax = G.YS + D.NOZ_OD / 2
-    plan_y = ymax <= D.AFT_DECK_W / 2
+    hw = G.aft_half_y(xa)
     avail = r['deck'](G.POSTX) - D.AFT_DECK_T - G.NOZ_ZTOP
-    post = 'post %.1f required between nozzle top and aft deck underside (cut from %.0f mm stock, check 18)' % (avail, D.NOZ_POST_STOCK_L)
-    return ('10 Nozzle fits under the aft deck', plan_x and plan_y and avail > 0,
-            'nozzle aft face %.1f aft of the transom vs deck %.1f (%.1f spare); outer edge Y %.1f vs deck half width %.1f; %s' % (
-                -xa, D.AFT_DECK_L, D.AFT_DECK_L + xa, ymax, D.AFT_DECK_W / 2, post))
+    post = 'post %.1f required between nozzle top and aft deck top skin underside (through the bottom skin and the beam bushing; cut from %.0f mm stock, check 18)' % (avail, D.NOZ_POST_STOCK_L)
+    return ('10 Nozzle fits under the aft deck', m0['inside'] and avail > 0,
+            'deck plan %s: nozzle aft face %.1f aft of the transom vs deck %.1f (%.1f spare); outer edge Y %.1f vs deck half width %.1f at that station; %s' % (
+                G.deck_plan(), -xa, D.AFT_DECK_L, D.AFT_DECK_L + xa, ymax, hw, post))
 
 
 def c11(r):
@@ -281,21 +281,33 @@ def c16(r):
 
 
 def c17(r):
-    """Bumper: a nozzle turned about its post, swept from 0 to BUMPER_TURN_DEG, keeps its aft-most and outboard-most points inside the aft deck outline."""
-    rows = G.nozzle_sweep()
+    """Bumper: a nozzle turned about its post, swept from 0 to BUMPER_TURN_DEG, keeps its whole plan footprint inside the outline of the chosen deck plan
+    (DECK_PLAN) by at least BUMPER_MARGIN_MIN: the distance to the aft edge, to the side and chamfer edges, and (tapered deck) to the step where the
+    aft deck, wider than the hull at the transom, ends against the hull outline."""
+    rows = G.nozzle_margin_rows()
     end = rows[-1]
-    aft = min(D.AFT_DECK_L - x['aft'] for x in rows)
-    out = min(D.AFT_DECK_W / 2 - x['out'] for x in rows)
-    wa = min(rows, key=lambda x: D.AFT_DECK_L - x['aft'])
-    wo = min(rows, key=lambda x: D.AFT_DECK_W / 2 - x['out'])
+    aft = min(x['m_aft'] for x in rows)
+    out = min(x['m_side'] for x in rows)
+    steps = [x for x in rows if x['m_step'] is not None]
+    stp = min(x['m_step'] for x in steps) if steps else None
+    chs = [x for x in rows if x['m_chamfer'] is not None]
+    chm = min(x['m_chamfer'] for x in chs) if chs else None
+    wa = min(rows, key=lambda x: x['m_aft'])
+    wo = min(rows, key=lambda x: x['m_side'])
     fwd = max(x['fwd'] for x in rows)
-    ok = aft >= D.BUMPER_MARGIN_MIN and out >= D.BUMPER_MARGIN_MIN
-    return ('17 Bumper: turned nozzle stays inside the aft deck', ok,
-            'nozzle turned %.0f deg: aft-most %.1f behind the transom (margin %.1f to the deck edge %.1f), outboard-most Y %.1f (margin %.1f to the deck edge %.1f); '
-            'swept 0 to %.0f deg: aft margin %.1f at %.1f deg, outboard margin %.1f at %.1f deg; need >= %.0f. '
-            'Forward-most point reaches X %.1f (positive is ahead of the transom plane; not part of this check)' % (
-                end['deg'], end['aft'], D.AFT_DECK_L - end['aft'], D.AFT_DECK_L, end['out'], D.AFT_DECK_W / 2 - end['out'], D.AFT_DECK_W / 2,
-                D.BUMPER_TURN_DEG, aft, wa['deg'], out, wo['deg'], D.BUMPER_MARGIN_MIN, fwd))
+    ok = aft >= D.BUMPER_MARGIN_MIN and out >= D.BUMPER_MARGIN_MIN and all(v is None or v >= D.BUMPER_MARGIN_MIN for v in (stp, chm))
+    extra = ''
+    if chm is not None:
+        extra += '; chamfer margin %.1f at %.1f deg (edges chamfered in to Y %.1f over the last %.0f)' % (chm, min(chs, key=lambda x: x['m_chamfer'])['deg'], D.BEAM / 2, D.AFT_CHAMFER_L)
+    if stp is not None:
+        extra += '; forward step margin %.1f at %.1f deg (where the %.1f wide aft deck meets the hull outline at the transom)' % (stp, min(steps, key=lambda x: x['m_step'])['deg'], D.AFT_DECK_W)
+    step_txt = extra
+    return ('17 Bumper: turned nozzle stays inside the deck outline', ok,
+            'deck plan %s: nozzle turned %.0f deg: aft-most %.1f behind the transom (margin %.1f to the deck edge %.1f), outboard-most Y %.1f (margin %.1f to the deck outline); '
+            'swept 0 to %.0f deg: aft margin %.1f at %.1f deg, outboard margin %.1f at %.1f deg%s; need >= %.0f. '
+            'Forward-most point reaches X %.1f (positive is ahead of the transom plane)' % (
+                G.deck_plan(), end['deg'], end['aft'], end['m_aft'], D.AFT_DECK_L, end['out'], end['m_side'],
+                D.BUMPER_TURN_DEG, aft, wa['deg'], out, wo['deg'], step_txt, D.BUMPER_MARGIN_MIN, fwd))
 
 
 def c18(r):
@@ -394,7 +406,42 @@ def c21(r):
             ('; '.join(hits) if hits else 'no conflicts') + '; %d solid pieces and the cap ribs tested' % len(ok_rows))
 
 
-ALL = (c1, c2, c3, c4, c5, c6, c7, c8, c9, c9b, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21)
+def c22(r):
+    """Aft deck cantilever: AFT_LOAD at the aft edge, shared by the two longitudinal beams (rectangular section, balsa along the grain)."""
+    k = G.aft_cantilever()
+    box = G.aft_box()
+    fits = box['h'] <= box['gap'] + D.FIT_EPS
+    ok = k['margin'] >= D.AFT_MARGIN_MIN and fits
+    return ('22 Aft deck cantilever (hand load at the aft edge)', ok,
+            'deck plan %s: %.0f g (%.2f N) at the aft edge, %.1f from the transom, %.2f N per beam (2 beams %.2f x %.2f); moment %.0f N mm, '
+            'Z %.1f mm3, stress %.2f vs %.1f MPa: margin %.2f, need >= %.1f; tip deflection %.2f mm (E %.0f MPa). '
+            'Beam %.2f high %s the %.2f between the skins (box %.1f). One beam alone: margin %.2f; post hole (%.0f) and skins not credited' % (
+                G.deck_plan(), D.AFT_LOAD, k['P'], k['L'], k['per'], box['w'], box['h'], k['M'], k['Z'], k['sigma'], D.BALSA_SIGMA, k['margin'], D.AFT_MARGIN_MIN,
+                k['defl'], D.E_BALSA, box['h'], 'fits in' if fits else 'does NOT fit in', box['gap'], D.AFT_DECK_DEPTH, k['margin_one'], D.NOZ_POST_D))
+
+
+def c23(r):
+    """Push bar: bottom edge clear of the water at the design position and at every battery position (deck fixed, waterline moves with trim), the bar front
+    face ahead of everything submerged (hull tip, blade tips)."""
+    z0 = G.bumper_z0(r['deck'])
+    z1 = G.bumper_z1(r['deck'])
+    rows = []
+    for b in _bat_positions():
+        rr = r if b == r['bat_x'] else hydro.at(b, r)
+        wl = rr['d0'] - rr['k'] * D.LOA
+        rows.append((b, z0 - wl))
+    low = min(c for _, c in rows)
+    sub = max(D.LOA, G.blade_xrange()[1])
+    ahead = G.BUMPER_X1 - sub
+    ok = low > D.BUMPER_WL_CLR_MIN and ahead > 0 and abs(z1 - r['deck'](D.LOA)) == 0
+    return ('23 Push bar clear of the water, ahead of the hull', ok,
+            'deck plan %s: bar X %.1f to %.1f (%.1f ahead of the bow tip, %.1f ahead of the forward-most submerged point at X %.1f), Z %.1f to %.1f (%.1f deep), thick %.0f, width %.0f; '
+            'bottom edge above the waterline: %s; need > %.0f. Top flush with the deck (Z %.1f); bar bottom %.1f above the keel line, bow draft %.1f' % (
+                G.deck_plan(), G.BUMPER_X0, G.BUMPER_X1, D.BUMPER_PROJ, ahead, sub, z0, z1, z1 - z0, D.BUMPER_T, 2 * max(p[1] for p in G.bumper_plan()),
+                ', '.join('%.1f at batteries %.0f' % (c, b) for b, c in rows), D.BUMPER_WL_CLR_MIN, z1, z0, r['bow']))
+
+
+ALL = (c1, c2, c3, c4, c5, c6, c7, c8, c9, c9b, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, c22, c23)
 
 
 def run_all(r=None):

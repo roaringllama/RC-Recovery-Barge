@@ -9,6 +9,8 @@ import design as D
 
 Box = namedtuple('Box', 'x0 x1 y0 y1 z0 z1')
 _THIRD = 1 / (1 + 2)            # centroid factor of a triangle
+_SIX = 2 * (1 + 2)              # section modulus divisor of a rectangle, b h^2 / 6
+_TWELVE = 2 * 2 * (1 + 2)       # second moment divisor of a rectangle, b h^3 / 12
 
 
 def _ret(a):
@@ -576,3 +578,216 @@ def lift_items(bat_xs):
     s_ = steer_servo_box()
     out.append(dict(name='steering servo', hatch='HS', x0=s_.x0, x1=s_.x1, y0=s_.y0, y1=s_.y1))
     return out
+
+
+# ---- deck plan, push bar, framed aft deck (v9.3) ---------------------------------------------------
+# Everything here reads design.DECK_PLAN when it is called (not at import), so one run can compare both plans.
+BUMPER_X1 = D.LOA + D.BUMPER_PROJ                    # push bar front face
+BUMPER_X0 = BUMPER_X1 - D.BUMPER_T                   # push bar aft face
+BUMPER_GAP = BUMPER_X0 - D.LOA                       # between the bow tip and the bar aft face (bridged by the mount arms)
+BUMPER_DEPTH = D.FREEBOARD - D.BUMPER_WL_CLR         # bar depth: deck top at the bow less (waterline at the bow + BUMPER_WL_CLR)
+BUMPER_ARM_Y = HT + D.TIP_W / 2                      # mount arm centerline Y: the middle of the sponson at the bow tip (port; starboard is the mirror)
+AFT_SKIN_LOW_T = D.SKIN_T                            # bottom skin of the aft deck box
+AFT_BEAM_GAP = D.AFT_DECK_DEPTH - D.AFT_DECK_T - AFT_SKIN_LOW_T   # room between the two skins for the beams
+
+
+def deck_plan(plan=None):
+    p = D.DECK_PLAN if plan is None else plan
+    if p not in D.DECK_PLANS:
+        raise ValueError('DECK_PLAN must be one of %s, not %r' % (D.DECK_PLANS, p))
+    return p
+
+
+def bumper_z0(zd):
+    """Bar bottom edge Z: the waterline at the bow tip plus BUMPER_WL_CLR (the deck is parallel to the waterline, FREEBOARD above it)."""
+    return zd(D.LOA) - D.FREEBOARD + D.BUMPER_WL_CLR
+
+
+def bumper_z1(zd):
+    """Bar top edge Z: flush with the deck top at the bow tip."""
+    return zd(D.LOA)
+
+
+def deck_front_x(plan=None):
+    """Forward end of the deck skin: the bar aft face for the rectangle, the bow tip for the tapered deck."""
+    return BUMPER_X0 if deck_plan(plan) == 'rect' else D.LOA
+
+
+def aft_deck_outline(plan=None):
+    """Plan polygon [(X, Y)] of the aft deck (X from -AFT_DECK_L to 0), both sides, the aft edge as the closing segment."""
+    L, hw = D.AFT_DECK_L, D.AFT_DECK_W / 2
+    if deck_plan(plan) == 'rect':
+        return [(-L, -hw), (0, -hw), (0, hw), (-L, hw)]
+    wc, c = D.BEAM / 2, -L + D.AFT_CHAMFER_L
+    return [(-L, -wc), (c, -hw), (0, -hw), (0, hw), (c, hw), (-L, wc)]
+
+
+def aft_half_y(X, plan=None):
+    """Aft deck half width at station X (X from -AFT_DECK_L to 0)."""
+    hw = D.AFT_DECK_W / 2
+    if deck_plan(plan) == 'rect':
+        return hw
+    wc, c = D.BEAM / 2, -D.AFT_DECK_L + D.AFT_CHAMFER_L
+    return hw if X >= c else wc + (hw - wc) * (X + D.AFT_DECK_L) / D.AFT_CHAMFER_L
+
+
+def deck_outline(plan=None):
+    """Plan polygon [(X, Y)] of the whole deck skin. rect: one rectangle from the aft end to the bar aft face. taper: the aft deck, then the hull
+    outline (wall offsets at the stations where the outline changes direction). The last segment is the aft edge."""
+    if deck_plan(plan) == 'rect':
+        L, hw, F = D.AFT_DECK_L, D.AFT_DECK_W / 2, BUMPER_X0
+        return [(-L, -hw), (F, -hw), (F, hw), (-L, hw)]
+    ad = aft_deck_outline('taper')
+    port = [p for p in ad if p[1] > 0]                              # (0, hw), (c, hw), (-L, wc): forward to aft
+    port = list(reversed(port))                                     # aft to forward: (-L, wc), (c, hw), (0, hw)
+    port += [(x, float(outer_wall_y(x))) for x in PLAN_STATIONS]
+    return port + [(x, -y) for x, y in reversed(port)]
+
+
+def deck_edges(plan=None):
+    """Segments of the deck outline as (p, q, kind): 'aft' for the aft edge, 'step' for the edge where the wider aft deck meets the hull outline at the
+    transom, 'chamfer' for the sloped aft deck edges (tapered deck only), 'side' for every other segment."""
+    pts = deck_outline(plan)
+    n = len(pts)
+    kind = lambda i, p, q: ('aft' if i == n - 1 else 'step' if p[0] == 0 and q[0] == 0 else
+                            'chamfer' if p[0] != q[0] and p[1] != q[1] and max(p[0], q[0]) <= 0 else 'side')
+    return [(pts[i], pts[(i + 1) % n], kind(i, pts[i], pts[(i + 1) % n])) for i in range(n)]
+
+
+def poly_area(pts):
+    return abs(sum(p[0] * q[1] - q[0] * p[1] for p, q in zip(pts, pts[1:] + pts[:1]))) / 2
+
+
+def aft_deck_area(plan=None):
+    return poly_area(aft_deck_outline(plan))
+
+
+def hull_deck_area():
+    """Plan area of the deck over the hull outline (both sponsons and the tunnel), X 0 to LOA: the outline is piecewise straight between the plan stations."""
+    w = lambda x: 2 * (HT + float(outer_off(x)))
+    return sum((w(a) + w(b)) / 2 * (b - a) for a, b in zip(PLAN_STATIONS, PLAN_STATIONS[1:]))
+
+
+def overhang_area(plan=None):
+    """Plan area of the deck skin outside the hull outline between the transom and the deck front (rect only; zero for the tapered deck)."""
+    if deck_plan(plan) != 'rect':
+        return 0.0
+    return D.AFT_DECK_W * BUMPER_X0 - hull_deck_area()
+
+
+def deck_brackets(plan=None):
+    """Frames extended outboard as deck brackets under the overhang (rect only): one dict per frame and side (port values), with the
+    frame X, the hull outer wall Y it starts at, the deck edge Y, and the length between them. Frames whose wall reaches the deck edge are left out."""
+    if deck_plan(plan) != 'rect':
+        return []
+    hw = D.AFT_DECK_W / 2
+    out = []
+    for x in D.FRAME_X:
+        y0 = float(outer_wall_y(x))
+        if hw > y0:
+            out.append(dict(x=x, y0=y0, y1=hw, L=hw - y0))
+    return out
+
+
+def bumper_plan(plan=None):
+    """Plan polygon [(X, Y)] of the push bar. rect: BUMPER_T by AFT_DECK_W. taper: the aft face is the deck width at the bow tip and the two
+    ends are chamfered back to the deck at BUMPER_CHAMFER_DEG through the bar thickness."""
+    if deck_plan(plan) == 'rect':
+        hw = D.AFT_DECK_W / 2
+        return [(BUMPER_X0, -hw), (BUMPER_X1, -hw), (BUMPER_X1, hw), (BUMPER_X0, hw)]
+    hw = float(outer_wall_y(D.LOA))
+    c = D.BUMPER_T / math.tan(math.radians(D.BUMPER_CHAMFER_DEG))
+    return [(BUMPER_X0, -hw), (BUMPER_X1, -(hw - c)), (BUMPER_X1, hw - c), (BUMPER_X0, hw)]
+
+
+def bumper_front_width(plan=None):
+    pts = bumper_plan(plan)
+    return max(p[1] for p in pts if p[0] == BUMPER_X1) * 2
+
+
+def bumper_arm_x0(zd):
+    """Forward end plate of the bow cap, where the mount arms start (the bow tip when the variant has no cap)."""
+    h = housing(zd)
+    return h['x1'] if h and h['kind'] == 'cap' else D.LOA
+
+
+def bumper_arms(zd):
+    """Mount arms (one per cap, port values; starboard mirrors): ply strips lying on the deck top from the cap forward plate to the bar aft face."""
+    x0 = bumper_arm_x0(zd)
+    z0 = zd(x0)
+    return dict(x0=x0, x1=BUMPER_X0, y=BUMPER_ARM_Y, w=D.BUMPER_ARM_W, t=D.BUMPER_ARM_T, L=BUMPER_X0 - x0, z0=z0, z1=z0 + D.BUMPER_ARM_T)
+
+
+def aft_box(plan=None):
+    """Aft deck framed box in plan, between the skins. Returns dict of rectangles (x0, x1, y0, y1) and the section numbers:
+    long (the two longitudinal beams, port values, from the transom beam to the end beam, at the sponson centerlines), transom (beam at the
+    transom, full width), end (beam at the aft edge, width of the outline there). Z: bottom skin below, top skin above, gap between."""
+    L, w, hw = D.AFT_DECK_L, D.AFT_BEAM['w'], aft_half_y(0, plan)
+    he = aft_half_y(-L + w / 2, plan)
+    return dict(
+        long=(-L + w, -w, YS - w / 2, YS + w / 2),
+        transom=(-w, 0.0, -hw, hw),
+        end=(-L, -L + w, -he, he),
+        long_len=L - 2 * w, transom_len=2 * hw, end_len=2 * he, w=w, h=D.AFT_BEAM['h'], gap=AFT_BEAM_GAP)
+
+
+def aft_cantilever():
+    """Aft deck as a cantilever from the transom: AFT_LOAD at the aft edge shared by the two longitudinal beams, each a rectangle
+    AFT_BEAM w wide and h high (the skins are ignored). Returns dict(P N, per N, L, M N mm, I mm4, Z mm3, sigma MPa, margin, margin_one, defl mm)."""
+    P = D.AFT_LOAD / 1000 * D.GRAVITY
+    per = P / 2
+    L = D.AFT_DECK_L
+    b, h = D.AFT_BEAM['w'], D.AFT_BEAM['h']
+    M = per * L
+    Z = b * h ** 2 / _SIX
+    I = b * h * h * h / _TWELVE
+    sigma = M / Z
+    return dict(P=P, per=per, L=L, M=M, I=I, Z=Z, sigma=sigma, margin=D.BALSA_SIGMA / sigma, margin_one=D.BALSA_SIGMA / (sigma * 2),
+                defl=per * L * L * L / ((1 + 2) * D.E_BALSA * I))
+
+
+def _seg_dist(p, a, b):
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    L2 = dx * dx + dy * dy
+    t = 0 if L2 == 0 else max(0, min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / L2))
+    return math.hypot(p[0] - (a[0] + t * dx), p[1] - (a[1] + t * dy))
+
+
+def _inside(p, pts):
+    """Even-odd point in polygon."""
+    c = False
+    for i, a in enumerate(pts):
+        b = pts[(i + 1) % len(pts)]
+        if (a[1] > p[1]) != (b[1] > p[1]) and p[0] < a[0] + (p[1] - a[1]) / (b[1] - a[1]) * (b[0] - a[0]):
+            c = not c
+    return c
+
+
+def nozzle_margins(deg, plan=None):
+    """Plan footprint of the port nozzle turned `deg` about its post against the deck outline. Returns dict(m_aft, m_side, m_step, m_chamfer, inside): the smallest
+    distance (mm) from the footprint to the aft edge, to the side edges, to the chamfers, and to the step edge where a wider aft deck meets the hull
+    (None when the plan has none). A point outside the outline counts as negative, in the class of the edge it is nearest to."""
+    n = D.BLADE_ARC_PTS
+    cs = nozzle_corners(deg)
+    pts = []
+    for i, a in enumerate(cs):
+        b = cs[(i + 1) % len(cs)]
+        pts += [(a[0] + (b[0] - a[0]) * k / n, a[1] + (b[1] - a[1]) * k / n) for k in range(n)]
+    outline, edges = deck_outline(plan), deck_edges(plan)
+    kinds = sorted({k for _, _, k in edges})
+    best = {k: None for k in kinds}
+    inside = True
+    for p in pts:
+        ins = _inside(p, outline)
+        inside = inside and ins
+        d = {k: min(_seg_dist(p, a, b) for a, b, kk in edges if kk == k) for k in kinds}
+        near = min(d, key=d.get)
+        for k in kinds:
+            v = d[k] * (1 if ins or k != near else -1)             # only the nearest edge sees the penetration
+            best[k] = v if best[k] is None else min(best[k], v)
+    return dict(m_aft=best['aft'], m_side=best['side'], m_step=best.get('step'), m_chamfer=best.get('chamfer'), inside=inside)
+
+
+def nozzle_margin_rows(turn=None, plan=None):
+    """nozzle_sweep rows with the margins to the deck outline added."""
+    return [dict(row, **nozzle_margins(row['deg'], plan)) for row in nozzle_sweep(turn)]

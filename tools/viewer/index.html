@@ -151,7 +151,7 @@ function materialFor(group, part) {
     if (/motor/.test(part)) return ELEC.motor;
     return ELEC.shaft;
   }
-  return balsa;                                             // hull, deck, caps, push_pad, skegs_shoes
+  return balsa;                                             // hull, deck, caps, bumper, skegs_shoes
 }
 
 // ---- glTF binary reader (positions, normals, indices, node transforms, names) -------------------------------------------
@@ -337,7 +337,7 @@ async function init() {
   });
   scene.add(boat);
   const box = new THREE.Box3();
-  ['hull', 'deck', 'caps', 'skegs_shoes', 'nozzles_props', 'push_pad'].forEach(g => (groups[g] || []).forEach(m => box.expandByObject(m)));
+  ['hull', 'deck', 'caps', 'skegs_shoes', 'nozzles_props', 'bumper'].forEach(g => (groups[g] || []).forEach(m => box.expandByObject(m)));
   box.getCenter(center); radius = box.getSize(new THREE.Vector3()).length() / 2;
   key.position.copy(center).add(new THREE.Vector3(-0.5, 1.4, 0.9).multiplyScalar(radius * 1.8));
   key.target.position.copy(center);

@@ -34,6 +34,6 @@ def test_export_writes_step_glb_and_manifest(tmp_path):
     assert os.path.getsize(files['step']) > 0 and files['step'].endswith('RC_Recovery_Barge_%s.step' % D.REV)
     assert os.path.getsize(files['glb']) > 0 and files['glb'].endswith('RC_Recovery_Barge_%s.glb' % D.REV)
     assert os.path.getsize(files['render_info']) > 0
-    for g in ('hull', 'deck', 'caps', 'skegs_shoes', 'nozzles_props', 'blades', 'blades_stowed', 'push_pad', 'electronics', 'water'):
+    for g in ('hull', 'deck', 'caps', 'skegs_shoes', 'nozzles_props', 'blades', 'blades_stowed', 'bumper', 'electronics', 'water'):
         assert g in manifest['groups'] and manifest['groups'][g]['volume_cm3'] > 0
         assert os.path.exists(os.path.join(str(tmp_path), manifest['groups'][g]['stl']))

@@ -91,6 +91,25 @@ def build(r=None):
         if sb_:
             sh.rect(xs(sb_.x1), ys(sb_.y1), (sb_.x1 - sb_.x0) * s, (sb_.y1 - sb_.y0) * s, 'elec')
             sh.text(xs((sb_.x0 + sb_.x1) / 2), ys((sb_.y0 + sb_.y1) / 2) + 0.8, 'BV', 'ts', 'middle')
+    # aft deck box (beams), deck brackets (rect plan), push bar and its mount arms, port side
+    half_ = sorted(p for p in G.deck_outline() if p[1] > 0)
+    sh.poly(P([(half_[0][0], 0.0)] + half_ + [(half_[-1][0], 0.0)]), 'thin', 'style="fill:none"')
+    ab = G.aft_box()
+    for key, nm in (('long', 'ALB'), ('transom', 'ATB'), ('end', 'AEB')):
+        x0_, x1_, y0_, y1_ = ab[key]
+        y0_ = max(y0_, 0.0)
+        sh.rect(xs(x1_), ys(y1_), (x1_ - x0_) * s, (y1_ - y0_) * s, 'gray')
+        sh.text(xs((x0_ + x1_) / 2), ys((y0_ + y1_) / 2) + 0.8, nm, 'ts', 'middle')
+    for b in G.deck_brackets():
+        sh.rect(xs(b['x'] + D.FRAME_T / 2), ys(b['y1']), D.FRAME_T * s, b['L'] * s, 'cut')
+    if G.deck_brackets():
+        sh.text(xs(G.deck_brackets()[3]['x']), ys(D.AFT_DECK_W / 2) - 1.6, 'DBK deck brackets (frames extended)', 'ts', 'middle')
+    am = G.bumper_arms(zd)
+    sh.rect(xs(am['x1']), ys(am['y'] + am['w'] / 2), am['L'] * s, am['w'] * s, 'gray')
+    pl_ = [(x, y) for x, y in G.bumper_plan() if y >= 0]
+    sh.poly(P(pl_ + [(pl_[-1][0], 0.0), (pl_[0][0], 0.0)]), 'cut')
+    sh.text(xs(G.BUMPER_X1) - 1, ys(0) - 3.6, 'bar', 'ts', 'start')
+    sh.text(xs(am['x0']), ys(am['y']) - 5.4, 'BA arm', 'ts', 'middle')
     sv = G.steer_servo_box()
     sp = D.PAD_MARGIN
     sh.rect(xs(sv.x1 + sp), ys(sv.y1 + sp), (sv.x1 - sv.x0 + 2 * sp) * s, (sv.y1 - sv.y0 + 2 * sp) * s, 'thin')
@@ -155,6 +174,7 @@ def build(r=None):
         srows.append(('CR', 'Bow cap ribs (frames inside the cap), per sponson', str(len(capr)), ', '.join('%s X %.0f %.1f high%s' % (
             f['mark'], f['x'], hz['ztop'] - zd(f['x']), ' (crosses the blade servo, check 21)' if sbx and sbx.x0 < f['x'] + D.FRAME_T / 2 and sbx.x1 > f['x'] - D.FRAME_T / 2 else '') for f in fr if f['mark'] in capr)))
     cols = [('MARK', 11), ('PART', 54), ('QTY', 11), ('SIZE (mm)', 76)]
+    wtable(sh, 332, 44, [('MARK', 9), ('PART', 32), ('QTY', 8), ('SIZE (mm)', 40)], S.deck_frame_rows(zd), 'AFT DECK, BRACKETS, PUSH BAR ARMS', step=2.7, pad=0.6)
     ys0 = wtable(sh, X, 108, cols, srows, 'SUPPORT SCHEDULE', step=2.7, pad=0.6)
     # ---- frame schedule
     cols = [('MARK', 9), ('X', 10), ('SPON OUT', 19), ('INSIDE', 13), ('HEIGHT', 13), ('SPONSON PIECE', 42), ('TUN W', 12), ('TUN H', 12), ('TUNNEL PIECE', 44), ('NOTES', 84)]

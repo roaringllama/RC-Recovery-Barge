@@ -67,11 +67,17 @@ def build(r=None):
         for sg in (1, -1):
             box(sg * bY - bt / 2, sg * bY + bt / 2, z_lo, bp['hinge_z'], 'blade')
         if look > 0:
-            # bow: full max section behind, then the push pad across the whole face
+            # bow: full max section behind (thin), the planked tip faces (20 wide, nothing projects below the bar), then the push bar at deck level on its arms
             section(Xsec, 'thin', '#fff', False)
-            box(-D.BEAM / 2, D.BEAM / 2, D.PUSH_PAD_INSET, zd(D.LOA) - D.PUSH_PAD_INSET, 'gray')
-            sh.text(cx, zs(zd(D.LOA) * 3 / 4), 'push pad %.0f mm, full bow face' % D.PUSH_PAD_T, 'ts', 'middle')
-            sh.text(cx - s * D.BEAM / 2 + 1, zs(zd(D.LOA) / 2), 'maximum section (thin) behind the pad', 'ts')
+            for sg in (1, -1):
+                sh.poly([(ys(sg * y), zs(z)) for y, z in G.hull_section(D.LOA, zd(D.LOA))], 'obj', 'style="fill:#fff"')
+            bz0, bz1 = G.bumper_z0(zd), G.bumper_z1(zd)
+            bw = G.bumper_front_width()
+            for sg in (1, -1):
+                box(sg * (G.BUMPER_ARM_Y - D.BUMPER_ARM_W / 2), sg * (G.BUMPER_ARM_Y + D.BUMPER_ARM_W / 2), zd(D.LOA), zd(D.LOA) + D.BUMPER_ARM_T, 'gray')
+            box(-bw / 2, bw / 2, bz0, bz1, 'gray')
+            sh.text(cx, zs((bz0 + bz1) / 2) + 0.8, 'push bar %.0f wide x %.0f deep x %.0f (deck plan %s)' % (bw, bz1 - bz0, D.BUMPER_T, G.deck_plan()), 'ts', 'middle')
+            sh.text(cx - s * D.BEAM / 2 + 1, zs(zd(D.LOA) / 4), 'maximum section (thin) behind the tips', 'ts')
             c = 'hid'
         else:
             Dsec, yin = section(Xsec, 'thk')
@@ -104,8 +110,14 @@ def build(r=None):
                 box(yc - D.NOZ_POST_D / 2, yc + D.NOZ_POST_D / 2, G.NOZ_ZTOP, dpost, 'prop')
                 box(yc - D.NOZ_POST_D / 2, yc + D.NOZ_POST_D / 2, G.SHOE_BOT, G.NOZ_ZBOT, 'prop')
         if look < 0:
-            zda = zd(-D.AFT_DECK_L / 2)
-            box(-D.AFT_DECK_W / 2, D.AFT_DECK_W / 2, zda - D.AFT_DECK_T, zda)
+            ab = G.aft_box()
+            zde = zd(-D.AFT_DECK_L)
+            he = ab['end_len'] / 2
+            if G.deck_plan() == 'taper':
+                box(-D.AFT_DECK_W / 2, D.AFT_DECK_W / 2, zde - D.AFT_DECK_DEPTH, zde, 'hid')                 # the full width part, forward of the chamfers
+            box(-he, he, zde - D.AFT_DECK_DEPTH, zde)                                                         # aft edge of the closed box
+            box(-he, he, zde - D.AFT_DECK_T - ab['h'], zde - D.AFT_DECK_T, 'thin', 'style="fill:#f1e3c8"')   # end beam between the skins
+            sh.text(ys(0), zs(zde - D.AFT_DECK_DEPTH) + 3.2, 'aft deck box edge, %.0f wide x %.1f deep (end beam %.2f x %.2f between the skins)' % (2 * he, D.AFT_DECK_DEPTH, ab['w'], ab['h']), 'ts', 'middle')
         if bp['housing'] == 'cap' and sbx:
             for sg in (1, -1):
                 box(sg * sbx.y0, sg * sbx.y1, sbx.z0, sbx.z1, 'hid')
@@ -142,10 +154,12 @@ def build(r=None):
 
     view(118, 'BOW VIEW', 'looking aft from ahead; bow face, blades extended solid and retracted dashed, skegs and nozzles hidden', +1)
     view(318, 'STERN VIEW', 'looking forward from astern; transom section, aft deck removed except its edge', -1)
-    y = 233
+    y = 229
     for t in ['%.3f mm (1/8 in) planked balsa over frames, glass both sides. Both bottom corners of each sponson, outer and tunnel side, are sanded to R%.0f (PENDING); where a section is narrower than 2 x R the radius is half the width (the stern section is %.1f wide, R%.1f). Skeg root fillets R%.0f and skeg and shoe edge rounds R%.0f (ASSUMED).' % (T, R, float(G.sponson_width(0)), float(G.bilge_r(0)), D.SKEG_ROOT_R, D.SKEG_EDGE_R),
               'Sponsons %.2f wide at the maximum section, %.1f at the transom with a straight taper to X %.0f (approved by the taper study); stern view shows the transom section, the full width as dashed lines.' % (D.SPONSON_W, D.AFT_W, D.AFT_TAPER_X),
               'Deck height: %.1f at the bow, %.1f at the transom; the deck is parallel to the waterline. Freeboard %.0f. Batteries at %.0f.' % (zd(D.LOA), zd(0), D.FREEBOARD, D.DESIGN_BAT_X),
+              'Bow: planked tip, nothing submerged projects forward; push bar Z %.1f to %.1f at deck level (%.0f above the waterline), on two ply arms to the bow caps. Stern: aft deck is a closed box %.1f deep (%s plan).' % (
+                  G.bumper_z0(zd), G.bumper_z1(zd), D.BUMPER_WL_CLR, D.AFT_DECK_DEPTH, G.deck_plan()),
               'Below the keel: skeg %.0f wide, shoe bottom %.1f below the keel, nozzle %.0f OD with a %.0f prop on a level axis at Z %.0f. Nozzle top %.1f under water at rest.' % (D.SKEG_W, -G.SHOE_BOT, D.NOZ_OD, D.PROP_D, D.PROP_Z, r['over']),
               ('Blade (%s): plane at Y %.1f in a %.0f wide trunk against the tunnel wall (Y %.1f to %.1f); extended %.1f below the keel (solid); retracted it rises to Z %.1f (dashed), through the deck into the bow cap, %.1f above the deck at the aft end and %.1f at the bow end. The blade servo (hidden, dashed) sits in the cap outboard of the blade plane, Y %.1f to %.1f. Batteries sit %.0f outboard (Y %.1f to %.1f) to clear the trunk.' % (
                   D.BLADE_VARIANT, bY, bp['trunk_w'], ty0, ty1, G.blade_depth(), max(p[1] for p in ret), hs['h0'], hs['h1'], sbx.y0, sbx.y1, D.BAT_Y_OFFSET, bat.y0, bat.y1)) if bp['housing'] == 'cap' else

@@ -245,14 +245,14 @@ def test_known_check_state(r):
     """Current results: every check passes except 21, the three owner-review conflicts reported on A-502 (F5 tunnel piece, F7 rib)."""
     res = {n.split()[0]: ok for n, ok, _ in checks.run_all(r)}
     assert {k for k, ok in res.items() if not ok} == set()
-    assert len(res) == 22 and res['19'] and res['20']
+    assert len(res) == 24 and res['19'] and res['20']
     assert res['6'] and res['15'] and res['17'] and res['18'] and res['13'] and res['9'] and res['9b'] and res['3'] and res['11']
 
 
 # ---- v9.1: design position 475, hatches HB and HC, linkage, shaft, density, checks 15 to 18 ---------------------
 
 def test_revision_and_design_position():
-    assert D.REV == 'v9.2'
+    assert D.REV == 'v9.3'
     assert D.DESIGN_BAT_X == 475.0 and D.BAT_SLIDE == (475.0, 590.0) and D.ALT_BAT_X == (520.0, 590.0)
     assert D.SWEEP_BAT_X == (475.0, 520.0)
     assert hydro.design()['bat_x'] == 475.0
@@ -407,8 +407,8 @@ def test_every_sheet_carries_the_revision(r):
     alts = [hydro.at(x, r) for x in D.ALT_BAT_X]
     results = checks.run_all(r)
     for sh in (a101.build(r, alts), a104.build(r), a301.build(r, alts), a601.build(r, alts, results), a004.build(rows)):
-        assert sh.rev == D.REV == 'v9.2'
-        assert 'v9.2, issued for review' in sh.svg()
+        assert sh.rev == D.REV == 'v9.3'
+        assert 'v9.3, issued for review' in sh.svg()
     svg = a601.build(r, alts, results).svg()
     assert '0.160 g/cm3 (10 lb/ft3)' in svg and 'DENSITY SENSITIVITY' in svg
     assert 'Pushrod, 2-56 rod' in a101.build(r, alts).svg()
@@ -526,3 +526,57 @@ def test_order_parts_lines_and_workbook(tmp_path, r):
     assert wb.sheetnames == ['Order', 'Summary', 'Exchange rates', 'Sources']
     assert tot['grand'] > 0 and tot['substitutes'] == sum(1 for l in ls if l['sub'])
     assert abs(sum(tot['by_group'].values()) - tot['grand']) < 1e-9
+
+
+# ---- v9.3 owner decisions: raised push bar, deck plan, framed aft deck -------------------------------------------------------
+def test_push_pad_constants_are_gone():
+    assert not hasattr(D, 'PUSH_PAD_T') and not hasattr(D, 'PUSH_PAD_INSET')
+
+
+def test_bumper_is_a_push_bar_at_deck_level(r):
+    z0, z1 = G.bumper_z0(r['deck']), G.bumper_z1(r['deck'])
+    assert abs(z1 - r['deck'](D.LOA)) < 1e-9
+    assert abs((z1 - z0) - (D.FREEBOARD - D.BUMPER_WL_CLR)) < 1e-9
+    wl_bow = r['d0'] - r['k'] * D.LOA
+    assert abs(z0 - wl_bow - D.BUMPER_WL_CLR) < 1e-9
+    assert abs(G.BUMPER_X1 - (D.LOA + D.BUMPER_PROJ)) < 1e-9 and abs(G.BUMPER_X1 - G.BUMPER_X0 - D.BUMPER_T) < 1e-9
+
+
+def test_deck_plan_switch_changes_outline_area_and_brackets():
+    with variants.deck_plan('rect'):
+        assert G.deck_brackets() and G.overhang_area() > 0
+        assert abs(G.deck_outline()[0][1]) <= D.AFT_DECK_W / 2 + 1e-9
+        a_rect = G.hull_deck_area() + G.overhang_area() + G.aft_deck_area()
+    with variants.deck_plan('taper'):
+        assert not G.deck_brackets() and G.overhang_area() == 0
+        a_taper = G.hull_deck_area() + G.overhang_area() + G.aft_deck_area()
+    assert a_rect > a_taper
+    assert G.deck_plan() == D.DECK_PLAN == 'rect'
+
+
+def test_rect_plan_passes_everything_and_taper_fails_only_check_17():
+    rows = {q['plan']: q for q in variants.plan_rows()}
+    assert rows['rect']['failed'] == []
+    assert rows['taper']['failed'] == ['17']
+    assert rows['rect']['W'] > rows['taper']['W']
+
+
+def test_aft_cantilever_numbers_and_threshold(monkeypatch):
+    k = G.aft_cantilever()
+    assert abs(k['margin'] - 2.06) < 0.01 and abs(k['defl'] - 1.41) < 0.01
+    assert abs(k['margin_one'] - k['margin'] / 2) < 1e-9
+    monkeypatch.setattr(D, 'AFT_MARGIN_MIN', 3.0)
+    res = {n.split()[0]: ok for n, ok, _ in checks.run_all(hydro.design())}
+    assert not res['22']
+
+
+def test_push_bar_check_clear_of_water_and_aft_box_fits(r):
+    res = {n.split()[0]: ok for n, ok, _ in checks.run_all(r)}
+    assert res['22'] and res['23']
+    assert G.aft_box()['h'] <= G.aft_box()['gap'] + D.FIT_EPS
+
+
+def test_weights_include_bar_and_aft_box(r):
+    names = [n for _, n, _, _ in r['items']]
+    assert any(n.startswith('Push bar core') for n in names) and any(n.startswith('Aft deck beams') for n in names)
+    assert not any('push pad' in n.lower() for n in names)

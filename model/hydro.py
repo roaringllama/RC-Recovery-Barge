@@ -45,7 +45,7 @@ def round_volumes(d0, k, n=None):
 
 def solve(bat_x=None, fixed_deck=None, rho=None, rounds=True):
     """Returns dict: W, G (LCG), d0 (stern draft), bow, k, trim (deg), over (water over nozzle top at the stern draft),
-    deck (function), deck_params (d0, k), items, area, disp, lcb, deck_off_level (deg, vs the built deck)."""
+    deck (function), deck_params (d0, k), items, area, disp, lcb, deck_off_level (deg, vs the built deck), deck_plan (design.DECK_PLAN at the solve)."""
     bat_x = D.DESIGN_BAT_X if bat_x is None else bat_x
     d0, k = D.D0_GUESS, D.K_GUESS
     if fixed_deck is not None:
@@ -67,7 +67,7 @@ def solve(bat_x=None, fixed_deck=None, rho=None, rounds=True):
     built = fixed_deck['deck_params'][1] if fixed_deck is not None else k
     return dict(W=Wt, G=Gx, d0=d0, k=k, bow=d0 - k * D.LOA, over=d0 - G.NOZ_ZTOP,
                 trim=math.degrees(math.atan(k)), deck=deck, deck_params=(fixed_deck['deck_params'] if fixed_deck is not None else (d0, k)),
-                items=items, area=area, disp=V, lcb=M / V, bat_x=bat_x, rho=D.BALSA_RHO if rho is None else rho, rounds=rounds,
+                items=items, area=area, disp=V, lcb=M / V, bat_x=bat_x, deck_plan=G.deck_plan(), rho=D.BALSA_RHO if rho is None else rho, rounds=rounds,
                 round_vol=round_volumes(d0, k) if rounds else dict(bilge=0.0, fillet=0.0),
                 deck_off_level=math.degrees(math.atan(built)) - math.degrees(math.atan(k)) if fixed_deck is not None else 0)
 
