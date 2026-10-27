@@ -19,7 +19,7 @@ if ROOT not in sys.path:
 import design as D
 
 OUT_DIR = os.path.join(ROOT, 'out', 'cad')
-PRESETS = ('bow', 'stern', 'profile', 'under')
+PRESETS = ('bow', 'stern', 'profile', 'under', 'bowclose')
 STILL_W, STILL_H = 1600, 1000
 LOAD_MS = 120000
 SETTLE_MS = 1500
@@ -52,7 +52,7 @@ def render(out_dir=OUT_DIR, extra='', suffix='', log=print):
             logs = []
             page.on('console', lambda m: logs.append(m.text))
             page.on('pageerror', lambda e: logs.append('PAGEERROR ' + str(e)))
-            url = 'http://127.0.0.1:%d/tools/viewer/index.html?blades=down&water=1%s' % (port, extra)
+            url = 'http://127.0.0.1:%d/tools/viewer/index.html?blades=down&water=1&rev=%s%s' % (port, D.REV, extra)
             page.goto(url, wait_until='commit', timeout=LOAD_MS)
             page.wait_for_function('window.__viewer && (window.__viewer.ready || window.__viewer.error)', timeout=LOAD_MS)
             err = page.evaluate('window.__viewer.error || null')

@@ -155,3 +155,6 @@ Tests extended (38): v9.1 constants, hatches, linkage geometry, post, shaft, den
 ## 2026-10-27, v9.2 blade material and single servo
 - Daggerboard material is now a choice (BLADE_MATERIALS); default G10 1.5 mm (PENDING), which sinks so gravity deploys and holds the blade. Blades 87 g each instead of 20 g; weight 3,169 g, nozzle margin 11.4 mm at 475.
 - One blade servo drives both blades through a cross line between the caps (route PENDING).
+
+## 2026-10-27, v9.3 viewer fix
+- The viewer loaded the v9.2 model by default, so the v9.3 stills showed the old bow. It now follows the revision (rev query parameter, default from the build) and the push bar is drawn in ply color. New close-up bow preset for the stills.
