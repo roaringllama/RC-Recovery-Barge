@@ -293,3 +293,21 @@ CAD_WATER_SPAN = 1.4            # water plane extends this many LOA and BEAM mul
 CAD_STL_TOL = 0.05              # STL linear tolerance (mm), numerical setting
 CAD_STL_ANG = 0.1               # STL angular tolerance (rad), numerical setting
 CAD_TRUNK_SLOT_FLOOR = True     # cut the blade trunk slot through the hull floor so the extended blade passes, render only
+
+
+# ---- builder documents (tools/builddocs; layout and stock settings from the owner brief of 2026-10-27, not hull dimensions) -----------------------
+INCH = 25.4                     # mm per inch, unit factor for page sizes and for stock sold in inches
+LETTER_IN = (8.5, 11.0)         # letter page, portrait for the template, cut list and planking PDFs, APPROVED (owner brief, 2026-10-27)
+TABLOID_IN = (17.0, 11.0)       # 11 x 17 page, landscape for the nesting layouts and the building board, APPROVED (owner brief, 2026-10-27)
+PAGE_MARGIN = 10.0              # margin on every builder page, APPROVED (owner brief, 2026-10-27)
+TILE_OVERLAP = 10.0             # overlap between neighbouring pages of a tiled 1:1 template; registration crosses sit half of this inside each page corner, APPROVED (owner brief, 2026-10-27)
+SCALE_BAR = 100.0               # scale bar printed on every template page, APPROVED (owner brief, 2026-10-27)
+CHECK_BOX = 50.0                # square printed on every template page, labelled measure: SCALE_BAR, APPROVED (owner brief, 2026-10-27)
+KERF = 1.0                      # saw kerf kept between nested parts and between pieces cut from one stick, APPROVED (owner brief, 2026-10-27)
+PLY_SHEET_IN = (12.0, 12.0)     # 1/8 in birch ply sheet as sold (order list line 1/8 x 12 x 12), APPROVED (owner brief, 2026-10-27)
+G10_SHEET_IN = (12.0, 24.0)     # G10 sheet as sold (order list line 0.060 x 12 x 24 in), APPROVED (owner brief, 2026-10-27)
+ROD_PACK = 3                    # K&S 9865 brass rod and 9822 brass tube are sold three 300 mm pieces to the pack, published
+ROD256_STOCK_IN = 12.0          # Du-Bro DUB172 2-56 threaded rod, length as sold, published
+CORD_STOCK_IN = 36.0            # silicone O-ring cord is sold in 3 ft lengths, published
+SECTION_SCALE = 0.5             # planking guide section drawings, 1:2, APPROVED (owner brief, 2026-10-27)
+BOARD_SCALE = 0.5               # building board sheet, 1:2 (a 1:1 tiled letter version is written as well), APPROVED (owner brief, 2026-10-27)

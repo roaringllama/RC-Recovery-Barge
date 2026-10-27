@@ -77,7 +77,14 @@ def main():
     render.render(sheets, pdf, OUT)
     print('wrote %s' % build_list.main(OUT, r))
     print('wrote %s and %s' % (pdf, os.path.join(OUT, 'p1.png to p%d.png' % len(sheets))))
+    builddocs_step(r)
     cad_step()
+
+
+def builddocs_step(r):
+    """Builder documents (out/builddocs/): part marks, cut list, nesting, full size templates, planking guide, building board, DXF and SVG."""
+    from tools.builddocs import make
+    make.main(os.path.join(OUT, 'builddocs'), r)
 
 
 def cad_step():

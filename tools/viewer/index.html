@@ -141,7 +141,7 @@ const water = new THREE.ShaderMaterial({
 
 function materialFor(group, part) {
   if (group === 'water') return water;
-  if (group === 'nozzles_props') return part.indexOf('prop') === 0 ? brass : part.indexOf('post') === 0 ? steel : matte;
+  if (group === 'nozzles_props') return /(^|_)prop_/.test(part) ? brass : /(^|_)post_/.test(part) ? steel : matte;
   if (group === 'blades' || group === 'blades_stowed') return g10;
   if (group === 'electronics') {
     if (/battery/.test(part)) return ELEC.battery;

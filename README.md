@@ -40,7 +40,7 @@ Axes: X from the transom forward, Z up from the keel, Y to port from the centerl
 
 ## Running
 
-Requires Python 3 with numpy, scipy, Pillow, Playwright (Chromium already installed), pytest, and for the CAD step CadQuery 2.8 (`pip install cadquery`). trimesh (`pip install trimesh`) is only a fallback for converting STL to glTF if CadQuery's own glTF export is not available; the current export does not need it.
+Requires Python 3 with numpy, scipy, Pillow, Playwright (Chromium already installed), pytest, for the CAD step CadQuery 2.8 (`pip install cadquery`), and for the DXF files ezdxf (`pip install ezdxf`). trimesh (`pip install trimesh`) is only a fallback for converting STL to glTF if CadQuery's own glTF export is not available; the current export does not need it.
 
     python3 build.py      # prints the checks report, then renders the sheets
     python3 -m pytest     # model tests
@@ -52,6 +52,22 @@ Requires Python 3 with numpy, scipy, Pillow, Playwright (Chromium already instal
 - `blade_sweep.csv`, the blade variant sweep at the design battery position (475) and the first alternate (520)
 - `checks.txt`, the checks report
 - `weights.csv`, the weight and balance items
+
+## Builder documents
+
+`build.py` writes the builder documents to `out/builddocs/` after the sheets (`tools/builddocs/make.py`; alone: `python3 -m tools.builddocs.make`). Everything is stamped `design.REV` and comes from the one model: `model/partmarks.py` (the part mark scheme, also used for the CAD part names and the mark column of A-103 and A-502), `model/partshapes.py` (flat outlines) and `model/schedules.py`. The documents give marks, dimensions, angles, quantities and layouts only, no assembly instructions. DXF export needs `ezdxf` (`pip install ezdxf`); without it the DXF files are skipped with a message and the SVG files are still written.
+
+| File | Content |
+|---|---|
+| `Cut_List_<REV>.pdf`, `cut_list.csv` | Stock cut list, one table per stock item: mark, qty, length, width or height, thickness, both end angles (90 where square), grain, stock piece number, note. Totals with 10 percent waste are checked against `order_parts` by a test |
+| `Nesting_Layouts_<REV>.pdf` | 11 x 17 in landscape, one page per stock sheet, to scale, marks, grain arrows, 1 mm kerf; summary page with the sheet count against the order. A part longer than its stock raises an error |
+| `Templates_Full_Size_<REV>.pdf` | Letter portrait at 1:1 for every flat part. Parts larger than a page are tiled with registration crosses and 10 mm overlap, labeled like `SK-P1 sheet 2 of 3 (row 1, col 2)`. Every page has a 100 mm scale bar, a 50 mm check box and a header with project, REV, part mark and page n of m |
+| `Planking_Guide_<REV>.pdf` | Sections at every frame station at 1:2, plank width table per station, plank length and stock sheet. Grain along the hull |
+| `Building_Board_1to2_<REV>.pdf`, `Building_Board_Full_Size_<REV>.pdf` | Board layout (keel datum, frame stations, deck slope, hinge, post centers, CV joint and motor axis, skegs, waterline at the design battery position, datum marks at X 0 and X 813): two 11 x 17 in sheets at 1:2 (the board is longer than one sheet at that scale), and a 1:1 tiled letter version |
+| `dxf/<mark>.dxf`, `svg/<mark>.svg` | Every template outline, 1:1 mm |
+| `part_marks.csv` | Every mark with kind, quantity, stock and template pages |
+
+The nesting reports the balsa sheet count against the order in `order_parts` (the order is 23 sheets). The nesting needs more sheets than the order because the planks are split into equal widths that cannot share a sheet width, and part rectangles are not area-perfect; this is reported, not hidden.
 
 ## CAD model, STEP, glTF and viewer
 

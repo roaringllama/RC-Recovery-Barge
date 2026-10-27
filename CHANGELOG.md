@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-10-27, v9.3: builder documents
+
+New `tools/builddocs/` (called from `build.py` after the sheets) writes `out/builddocs/`: stock cut list (PDF 18 pages, CSV), nesting layouts (47 pages, 11 x 17 in), full-size templates (120 pages, 119 parts, tiled with registration crosses), planking guide (8 pages), building board (2 sheets at 1:2, 12 tiles at 1:1), DXF (ezdxf) and SVG per template, and `part_marks.csv`.
+
+- New part mark scheme `model/partmarks.py` (298 marks, 119 templates, 246 cut rows) with `model/marknames.py` and flat outlines in `model/partshapes.py`. Used by `tools/cad.py` part names and by the mark columns of A-103 and A-502. Plank marks are `<panel>.<n>`; panel display names changed on A-103 (`SK-P1`, `BB-C`, `DO-P`, `TE-A`, `AD-T` and so on).
+- `model/schedules.py`: panel planks no wider than the part (TP, TR, CA are single pieces; they no longer carry A-501 seam backing); deck frame marks renamed.
+- `design.py`: builder-documents block (page and tile sizes, overlap, scale bar, check box, kerf, sheet sizes, drawing scales). Tests: `tests/test_builddocs.py`; literal scan now covers `partmarks.py`, `partshapes.py` and `marknames.py`.
+- Findings, not fixed: nesting needs 35 balsa sheets against the 23 ordered (equal plank splits near 42 mm cannot share a 76.2 mm sheet; wider planks would give about 29); no part is longer than its stock. Not in the model, so not on the documents: post bushing hole, blade hinge and line hole diameters, lid tab width, M3 nut flat size, equipment notch sizes in the tunnel frames, pintle pin depth, lengths for the brass tie bar, bushing tube, 1.5 mm push bar face ply and the 3/4 x 1/4 strip (none on the order list). Order rail length is 155 against 270 in the geometry; pushrod quantity 1 against the order's 2; chine order has one spare.
+
 ## 2026-10-27, v9.3: raised push bar, deck plan option, framed aft deck
 
 All items tagged in `design.py` (APPROVED, owner 2026-10-27, unless marked). `REV` is v9.3.

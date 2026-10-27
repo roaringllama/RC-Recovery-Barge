@@ -10,6 +10,7 @@ import re
 import tokenize
 import design as D
 from . import geometry as G
+from . import marknames as MN
 
 BOTH = 2                                   # port and starboard
 TAGS = ('PENDING', 'ASSUMED', 'ESTIMATE')
@@ -60,7 +61,7 @@ def _trap(fn, xs):
 
 
 def _P(mark, name, qty, where, kind, length, h0, h1, area, cross, note='', t=None, angle=''):
-    n = _planks(cross, length)
+    n = _planks(min(cross, length), length)               # planks run along the grain: a part narrower than the stock width in either direction is one piece
     return dict(mark=mark, name=name, qty=qty, where=where, kind=kind, length=length, h0=h0, h1=h1, t=D.SKIN_T if t is None else t,
                 area=area, planks=n, plank_w0=h0 / n, plank_w1=h1 / n, note=note, angle=angle,
                 seam=(n - 1) * length)
@@ -286,15 +287,15 @@ def deck_frame_rows(zd):
     """Rows for the aft deck box, the deck brackets (rect plan) and the push bar mount arms: (mark, part, qty, size text), terse for a narrow table."""
     ab = G.aft_box()
     sec = '%.2f x %.2f' % (ab['w'], ab['h'])
-    rows = [('ALB', 'Aft beam, long, at Y +/- %.1f, post bushing' % G.YS, str(BOTH), '%.1f x %s' % (ab['long_len'], sec)),
-            ('ATB', 'Aft beam, transom', '1', '%.1f x %s' % (ab['transom_len'], sec)),
-            ('AEB', 'Aft beam, aft edge', '1', '%.1f x %s' % (ab['end_len'], sec))]
+    rows = [('AD-BP AD-BS', 'Aft beam, long, at Y +/- %.1f, post bushing' % G.YS, str(BOTH), '%.1f x %s' % (ab['long_len'], sec)),
+            ('AD-BT', 'Aft beam, transom', '1', '%.1f x %s' % (ab['transom_len'], sec)),
+            ('AD-BE', 'Aft beam, aft edge', '1', '%.1f x %s' % (ab['end_len'], sec))]
     brk = G.deck_brackets()
     if brk:
-        rows.append(('DBK', 'Deck bracket, frame extended, F1 to F%d' % len(D.FRAME_X), str(BOTH * len(brk)),
+        rows.append(('BR-x###-P/S', 'Deck bracket, frame extended, F1 to F%d' % len(D.FRAME_X), str(BOTH * len(brk)),
                      '%.1f to %.1f x %.3f x %.1f deep' % (min(b['L'] for b in brk), max(b['L'] for b in brk), D.FRAME_T, D.FRAME_RIB)))
     arm = G.bumper_arms(zd)
-    rows.append(('BA', 'Push bar arm, ply, cap plate to bar', str(BOTH), '%.1f x %.1f x %.3f' % (arm['L'], arm['w'], arm['t'])))
+    rows.append(('BA-P BA-S', 'Push bar arm, ply, cap plate to bar', str(BOTH), '%.1f x %.1f x %.3f' % (arm['L'], arm['w'], arm['t'])))
     return rows
 
 

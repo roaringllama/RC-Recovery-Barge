@@ -4,7 +4,7 @@ from .lib import *
 from .wtbl import wtable
 from .tbl import para
 import design as D
-from model import geometry as G, hydro, schedules as S
+from model import geometry as G, hydro, schedules as S, marknames as MN
 
 BF = 'style="fill:#f1e3c8"'
 
@@ -148,7 +148,7 @@ def build(r=None):
         sh.circ(tx_ + tf['tun_w'] * s3 / 2 + g['y'] * s3, base - g['z'] * s3, g['d'] / 2 * s3, 'obj', 'style="fill:#fff"')
     else:
         sh.rect(tx_ + D.FRAME_RIB * s3, base - tf['tun_h'] * s3 + D.FRAME_RIB * s3, (tf['tun_w'] - 2 * D.FRAME_RIB) * s3, (tf['tun_h'] - 2 * D.FRAME_RIB) * s3, 'obj', 'style="fill:#fff"')
-    sh.text(tx_ + tf['tun_w'] * s3 / 2, base + 3.6, 'tunnel piece of %s' % tf['mark'], 'tb', 'middle')
+    sh.text(tx_ + tf['tun_w'] * s3 / 2, base + 3.6, 'tunnel piece %s' % MN.frame_marks(tf['num'])[S.BOTH], 'tb', 'middle')
     sh.text(tx_ + tf['tun_w'] * s3 / 2, base + 6.8, '%.1f x %.1f above the roof plate' % (tf['tun_w'], tf['tun_h']), 'ts', 'middle')
     if tf['tunnel_solid']:
         sh.text(tx_ + tf['tun_w'] * s3 / 2, base + 10, 'solid, one %.0f grommet hole' % tf['grommet']['d'], 'ts', 'middle')
@@ -157,27 +157,29 @@ def build(r=None):
     srows = []
     for q in sup:
         if q['mark'].startswith('BH'):
-            srows.append((q['mark'], q['part'], str(q['qty']), '%.2f x %.2f x %.3f, X %.1f' % (q['w'], q['h'], q['t'], q['x'])))
-    srows.append(('DB', 'Deck beam, full width (3)', '3', ', '.join('X %.0f: %.1f long' % (x, 2 * (G.HT + float(G.outer_off(x)))) for x in D.DECK_BEAMS) + '; %.2f wide x %.2f deep' % (D.DECK_BEAM_W, D.DECK_BEAM_T)))
+            bn = int(q['mark'][2:-1])
+            fnum = [f['num'] for f in fr if f['bulkhead']][bn - 1]
+            srows.append(('BH%d' % bn, '%s (%s)' % (q['part'], ' + '.join(MN.frame_marks(fnum)[:S.BOTH])), str(q['qty']), '%.2f x %.2f x %.3f, X %.1f' % (q['w'], q['h'], q['t'], q['x'])))
+    srows.append((' '.join(MN.beam_mark(x) for x in D.DECK_BEAMS), 'Deck beam, full width (%d)' % len(D.DECK_BEAMS), str(len(D.DECK_BEAMS)), ', '.join('X %.0f: %.1f long' % (x, 2 * (G.HT + float(G.outer_off(x)))) for x in D.DECK_BEAMS) + '; %.2f wide x %.2f deep' % (D.DECK_BEAM_W, D.DECK_BEAM_T)))
     srows.append(('RL', 'Battery rail', '4', '%.0f x %.2f x %.1f' % (rail_l, D.RAIL_W, D.BAT['rail'])))
-    srows.append(('MM', 'Motor mount, laminated', '2', '%.1f x %.0f, %.1f aft to %.1f fwd high, %d layers of %.3f, top at %.0f deg' % (m['l'], m['w'], m['h_aft'], m['h_fwd'], m['layers'], T, m['angle'])))
+    srows.append(('MM-P MM-S', 'Motor mount, laminated', '2', '%.1f x %.0f, %.1f aft to %.1f fwd high, %d layers of %.3f, top at %.0f deg' % (m['l'], m['w'], m['h_aft'], m['h_fwd'], m['layers'], T, m['angle'])))
     srows.append(('MC', 'Motor clamp cap, ply', '2', '%.1f x %.0f x %.3f' % (m['l'], m['w'], T)))
     sv_ = D.STEER_SERVO
     srows.append(('SV', 'Steering servo pad, ply', '1', '%.1f x %.1f x %.3f' % (sv_['l'] + 2 * D.PAD_MARGIN, sv_['w'] + 2 * D.PAD_MARGIN, T)))
     bb = D.BLADE_SERVO
     srows.append(('BV', 'Blade servo shelf, ply, in the bow cap', '1', '%.1f x %.1f x %.3f, hung from the outboard cap wall and the cap ribs' % (bb['l'] + 2 * D.PAD_MARGIN, bb['w'] + 2 * D.PAD_MARGIN, T)))
     srows.append(('LP', 'Latch pad, ply, M3 nut captured', str(ht['latches']), '%.1f x %.1f x %.3f (A-503)' % (D.LATCH_PAD, D.LATCH_PAD, T)))
-    srows.append(('RR', 'Hatch rim ring', str(ht['lids']), '%.3f thick, %.3f wide (A-503)' % (D.RIM_T, D.RIM_W)))
+    srows.append(('RR-xx', 'Hatch rim ring', str(ht['lids']), '%.3f thick, %.3f wide (A-503)' % (D.RIM_T, D.RIM_W)))
     capr = [f['mark'] for f in fr if hz and hz['kind'] == 'cap' and hz['x0'] < f['x'] < hz['x1']]
     if capr:
         sbx = G.blade_servo_box(zd)
-        srows.append(('CR', 'Bow cap ribs (frames inside the cap), per sponson', str(len(capr)), ', '.join('%s X %.0f %.1f high%s' % (
+        srows.append((' '.join(MN.rib_mark(f['x']) for f in fr if f['mark'] in capr), 'Bow cap ribs (frames inside the cap), per sponson', str(len(capr)), ', '.join('%s X %.0f %.1f high%s' % (
             f['mark'], f['x'], hz['ztop'] - zd(f['x']), ' (crosses the blade servo, check 21)' if sbx and sbx.x0 < f['x'] + D.FRAME_T / 2 and sbx.x1 > f['x'] - D.FRAME_T / 2 else '') for f in fr if f['mark'] in capr)))
-    cols = [('MARK', 11), ('PART', 54), ('QTY', 11), ('SIZE (mm)', 76)]
-    wtable(sh, 332, 44, [('MARK', 9), ('PART', 32), ('QTY', 8), ('SIZE (mm)', 40)], S.deck_frame_rows(zd), 'AFT DECK, BRACKETS, PUSH BAR ARMS', step=2.7, pad=0.6)
+    cols = [('MARK', 24), ('PART', 54), ('QTY', 11), ('SIZE (mm)', 76)]
+    wtable(sh, 332, 44, [('MARK', 21), ('PART', 30), ('QTY', 7), ('SIZE (mm)', 34)], S.deck_frame_rows(zd), 'AFT DECK, BRACKETS, PUSH BAR ARMS', step=2.7, pad=0.6)
     ys0 = wtable(sh, X, 108, cols, srows, 'SUPPORT SCHEDULE', step=2.7, pad=0.6)
     # ---- frame schedule
-    cols = [('MARK', 9), ('X', 10), ('SPON OUT', 19), ('INSIDE', 13), ('HEIGHT', 13), ('SPONSON PIECE', 42), ('TUN W', 12), ('TUN H', 12), ('TUNNEL PIECE', 44), ('NOTES', 84)]
+    cols = [('MARK', 21), ('X', 10), ('SPON OUT', 19), ('INSIDE', 13), ('HEIGHT', 13), ('SPONSON PIECE', 38), ('TUN W', 12), ('TUN H', 12), ('TUNNEL PIECE', 40), ('NOTES', 76)]
     rows = []
     for f in fr:
         if f['kind'] == 'ring':
@@ -191,7 +193,7 @@ def build(r=None):
         else:
             ot = 'solid'
         tp = ('solid, grommet %.0f' % f['grommet']['d']) if f['tunnel_solid'] else 'ring, opening %.1f x %.1f' % (f['tun_w'] - 2 * D.FRAME_RIB, f['tun_h'] - 2 * D.FRAME_RIB)
-        rows.append((f['mark'], '%.0f' % f['x'], '%.2f' % f['w_out'], '%.2f' % f['w_in'], '%.2f' % f['h'], ot, '%.2f' % f['tun_w'], '%.2f' % f['tun_h'], tp, _short(f)))
+        rows.append((MN.frame_cell(f['num']), '%.0f' % f['x'], '%.2f' % f['w_out'], '%.2f' % f['w_in'], '%.2f' % f['h'], ot, '%.2f' % f['tun_w'], '%.2f' % f['tun_h'], tp, _short(f)))
     yf = wtable(sh, 160, 162, cols, rows, 'FRAME SCHEDULE (1/8 in, grain vertical; transom TR and tip TP are closures, A-103)', step=2.7, pad=0.6)
     # ---- details, left column
     sh.text(14, 162, 'MOTOR MOUNT MM, side view 1:1 (port; bow right)', 'tb')

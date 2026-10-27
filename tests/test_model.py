@@ -85,7 +85,8 @@ def test_check_functions_individually(r):
 
 def test_no_numeric_literals_outside_design():
     allowed = {0, 1, 2, 1000}
-    files = ['build.py'] + [os.path.join('model', f) for f in ('geometry.py', 'weights.py', 'hydro.py', 'checks.py', 'variants.py', 'schedules.py', 'study.py')]
+    files = ['build.py'] + [os.path.join('model', f) for f in ('geometry.py', 'weights.py', 'hydro.py', 'checks.py', 'variants.py', 'schedules.py', 'study.py',
+                                                       'partshapes.py', 'partmarks.py', 'marknames.py')]
     bad = []
     for f in files:
         tree = ast.parse(open(os.path.join(ROOT, f)).read())

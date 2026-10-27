@@ -4,7 +4,7 @@ from .lib import *
 from .wtbl import wtable
 from .tbl import para
 import design as D
-from model import geometry as G, hydro, schedules as S
+from model import geometry as G, hydro, schedules as S, marknames as MN
 
 
 def build(r=None):
@@ -88,9 +88,9 @@ def build(r=None):
         w0 = '%.2f' % p['h0'] if not sk else '%.2f (at transom)' % p['h0']
         w1 = '%.2f' % p['h1'] if not sk else '0 (at the point)'
         pk = '%d x %.1f to %.1f' % (p['planks'], p['plank_w0'], p['plank_w1']) if p['planks'] > 1 else '1 piece'
-        rows.append((p['mark'], p['name'], str(p['qty']), dims, w0, w1, '%.3f' % p['t'], '%.1f' % (p['area'] / 100), pk, p['note']))
+        rows.append((MN.a103_mark(p['mark']), p['name'], str(p['qty']), dims, w0, w1, '%.3f' % p['t'], '%.1f' % (p['area'] / 100), pk, p['note']))
         fills.append('#f4f0e6' if p['where'] in ('trunk', 'cap') else None)
-    cols = [('MARK', 11), ('PANEL', 40), ('QTY', 8), ('LENGTH', 17), ('H OR W AFT', 24), ('H OR W FWD', 24), ('THICK', 13), ('AREA CM2', 17), ('PLANKS', 32), ('ANGLE AND NOTE', 222)]
+    cols = [('MARK', 30), ('PANEL', 40), ('QTY', 8), ('LENGTH', 17), ('H OR W AFT', 24), ('H OR W FWD', 24), ('THICK', 13), ('AREA CM2', 17), ('PLANKS', 32), ('ANGLE AND NOTE', 203)]
     y0 = 137
     y = wtable(sh, 14, y0, cols, rows, None, step=2.9, pad=0.7, fills=fills)
     sh.text(14, y + 3.8, 'PANEL SCHEDULE. Lengths are along the outer face; heights and widths at the two ends (trapezoids). Shaded rows are the trunk and the bow cap (carried as lumps in A-601). QTY counts both sponsons. Thickness: skin %.3f, aft deck skins %.3f, shoe %.2f, push bar %.0f. Deck plan: %s (AD and AB are the two skins of the aft deck box; beams and brackets are on A-502).' % (T, D.AFT_DECK_T, D.SHOE_T, D.BUMPER_T, G.deck_plan()), 't')

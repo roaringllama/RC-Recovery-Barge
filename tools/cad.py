@@ -19,7 +19,7 @@ if ROOT not in sys.path:
 
 import cadquery as cq
 import design as D
-from model import geometry as G, hydro
+from model import geometry as G, hydro, partmarks
 
 OUT_DIR = os.path.join(ROOT, 'out', 'cad')
 SEP = '__'
@@ -48,7 +48,8 @@ class Part:
 
     @property
     def full(self):
-        return self.group + SEP + self.name
+        """group__MARK_name: the part carries its builder mark (model/partmarks.py), e.g. hull__HS-P_sponson_port."""
+        return self.group + SEP + partmarks.cad_name(self.name)
 
 
 # ---- helpers -------------------------------------------------------------------------------------------------------------------------
