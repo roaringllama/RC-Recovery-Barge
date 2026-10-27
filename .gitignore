@@ -1,0 +1,8 @@
+out/*
+__pycache__
+*.pyc
+!out/.gitkeep
+.pytest_cache
+
+# Issued PDFs are kept in the folder for reference but not tracked
+pdf/*
