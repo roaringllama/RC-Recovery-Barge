@@ -224,7 +224,7 @@ def test_steering_servo_lies_on_its_side_on_the_roof():
 
 def test_receiver_moved_forward_and_clears_the_escs():
     rx = G.rx_box()
-    assert (rx.x0, rx.x1) == (345.0, 392.0)
+    assert (rx.x0, rx.x1) == (338.0, 385.0)
     for e in G.esc_boxes():
         assert not (min(rx.x1, e.x1) - max(rx.x0, e.x0) > 0 and min(rx.y1, e.y1) - max(rx.y0, e.y0) > 0)
 
@@ -243,7 +243,7 @@ def test_battery_offset_outboard_clears_the_trunk():
 def test_known_check_state(r):
     """Current results: every check passes except 21, the three owner-review conflicts reported on A-502 (F5 tunnel piece, F7 rib)."""
     res = {n.split()[0]: ok for n, ok, _ in checks.run_all(r)}
-    assert {k for k, ok in res.items() if not ok} == {'21'}
+    assert {k for k, ok in res.items() if not ok} == set()
     assert len(res) == 22 and res['19'] and res['20']
     assert res['6'] and res['15'] and res['17'] and res['18'] and res['13'] and res['9'] and res['9b'] and res['3'] and res['11']
 
@@ -276,7 +276,7 @@ def test_hatch_hb_is_centered_on_the_shifted_battery_and_hc_covers_the_escs():
 
 def test_receiver_is_forward_of_the_escs_inside_hc():
     rx = G.rx_box()
-    assert (rx.x0, rx.x1) == (345.0, 392.0)
+    assert (rx.x0, rx.x1) == (338.0, 385.0)
     hc = G.hatch_open('HC', 0.0)
     assert hc['x0'] <= rx.x0 and rx.x1 <= hc['x1']
     for e in G.esc_boxes():
@@ -353,7 +353,7 @@ def test_check_15_only_tests_the_open_part_of_the_trunk(r, monkeypatch):
     zd = r['deck']
     above = G.stowed_above(zd)
     open_x0 = min(p[0] for p in above)
-    assert checks.c15(r)[1] and '(5.1 clear in X)' in checks.c15(r)[2]          # HB x1 582 plus the 6 flange is 588, the open trunk starts at 593.1
+    assert checks.c15(r)[1] and '(5.5 clear in X)' in checks.c15(r)[2]          # HB x1 582 plus the 6 flange is 588, the open trunk starts at 593.1
     monkeypatch.setitem(D.HATCHES, 'HB', dict(D.HATCHES['HB'], x1=open_x0 - D.FLANGE + 2.5))        # the flange reaches 2.5 into the open part
     assert checks.c15(r)[1] is False and 'open trunk by 2.5 in X' in checks.c15(r)[2]
     monkeypatch.setitem(D.HATCHES, 'HB', dict(D.HATCHES['HB'], x1=open_x0 - D.FLANGE - 0.5))
@@ -453,7 +453,7 @@ def test_build_list_writes_workbook(tmp_path, r):
 def test_v92_constants():
     assert D.PROP_D == 45.0 and D.PROP_D_ALT == 50.0 and D.NOZ_OD == 60.0 and D.NOZ_L == 60.0 and D.NOZ_OD_ALT == 65.0
     assert D.BILGE_R == 15.0 and D.SKEG_ROOT_R == 8.0 and D.SKEG_EDGE_R == 6.0
-    assert D.TRUNK_TIP_CLR == 5.0 and D.LINE_R == 200.0 and D.BLADE_SERVO_BAY == (600.0, 650.0)
+    assert D.TRUNK_TIP_CLR == 5.0 and D.LINE_R == 250.0 and D.BLADE_SERVO_BAY == (655.0, 705.0)
     assert (D.BLADE_SERVO['l'], D.BLADE_SERVO['w'], D.BLADE_SERVO['h']) == (40.0, 40.5, 20.0)
     assert not hasattr(D, 'BLADE_BOX')
     assert D.MOTOR_KV == 1200.0 and D.FLOOR_FRACTION == 0.08 and dict(D.PACK_V) == {'3S': 11.1, '2S': 7.4}
@@ -471,7 +471,7 @@ def test_tip_clearance_and_servo_in_the_cap(r):
     h = G.housing(zd)
     assert abs(h['ztop'] - (max(h['z_blade'], sb.z1) + D.CAP_CLR)) < 1e-9
     res = {n.split()[0]: ok for n, ok, _ in checks.run_all(r)}
-    assert res['19'] and res['20'] and not res['21']
+    assert res['19'] and res['20'] and res['21']
 
 
 def test_rounds_reduce_waterplane_and_raise_draft(r):

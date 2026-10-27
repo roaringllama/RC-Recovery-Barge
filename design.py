@@ -107,9 +107,9 @@ BLADE_VARIANT = 'reverse25'     # default selection, APPROVED (owner chose it on
 BLADE_ARC_PTS = 48              # arc resolution for outlines and checks, ASSUMED (numerical setting)
 CAP_CLR = 5.0                   # bow cap top clears the stowed blade by this much, PENDING
 TRUNK_TIP_CLR = 5.0             # the blade tip (extended or stowed) stops at least this far short of the trunk end it points toward (check 19), APPROVED (owner, 2026-10-27)
-LINE_R = 200.0                  # blade lift line attaches on the blade upper edge this far from the hinge (X 620 for reverse25) and runs straight up through the open trunk to the spool, APPROVED (owner, 2026-10-27)
+LINE_R = 250.0                  # blade lift line attaches on the blade upper edge this far from the hinge (X 670 for reverse25, between cap ribs F7 and F8) and runs straight up through the open trunk to the spool, APPROVED (owner, 2026-10-27)
 BLADE_SERVO = dict(l=40.0, w=40.5, h=20.0)   # blade servo DS3225 (40 x 20 x 40.5) on its side inside the bow cap, outboard of the blade plane: footprint l along X, w along Y, h tall; output shaft STEER_OUT_X from its aft end, at mid-height; mass is BLADE_MECH_MASS, APPROVED (owner, 2026-10-27)
-BLADE_SERVO_BAY = (600.0, 650.0)  # X range in the bow cap reserved for the blade servo and spool, APPROVED (owner, 2026-10-27)
+BLADE_SERVO_BAY = (655.0, 705.0)  # X range in the bow cap reserved for the blade servo and spool, between cap ribs F7 (620) and F8 (706), APPROVED (owner, 2026-10-27)
 # sweep: (label, base variant key, overrides). Overrides replace entries of the base dict.
 BLADE_SWEEP = [
     ('trail R400 15 deg hinge 785', 'trail', {}),
@@ -130,7 +130,7 @@ TOWER_H = 44.0                  # tower height above the deck, APPROVED
 # ---- electronics (positions APPROVED from v7 unless noted) -------------------------------------
 STEER_SERVO = dict(l=40.0, w=40.5, h=20.0, x0=20.0, mass=60.0)         # DS3225 lying on its side on the tunnel roof, centered, X 20 to 60: height 20, footprint 40 x 40.5, APPROVED; output shaft at mid-height, pointing to port
 ESC = dict(l=60.5, w=38.5, h=25.6, x0=270.0, y=20.8, mass=93.0)                 # SeaKing 60A, two, on the tunnel roof at Y +/- y
-RX = dict(l=47.0, w=26.0, h=15.0, x0=345.0, mass=14.9)                          # FS-iA6B on the roof, X0 is the aft edge, centered; X 345 to 392, forward of the ESCs (X 270 to 330.5) and inside hatch HC (X 265 to 400), APPROVED (owner, 2026-10-27)
+RX = dict(l=47.0, w=26.0, h=15.0, x0=338.0, mass=14.9)                          # FS-iA6B on the roof, X0 is the aft edge, centered; X 338 to 385, clear of the F5 tunnel piece at 388.4, forward of the ESCs (X 270 to 330.5) and inside hatch HC (X 265 to 400), APPROVED (owner, 2026-10-27)
 BAT = dict(l=155.0, w=42.0, h=24.0, mass=343.0, rail=2.5)                       # one per sponson on 2.5 mm rails
 BAT_Y_OFFSET = 5.0              # each battery (and its rails) sits this far outboard of the sponson centerline (center Y 97.075 instead of 92.075) so the 12 mm tunnel-side blade trunk clears it, PENDING (owner may prefer the trunk on the outboard wall instead)
 MOTOR_MASS = 275.0              # ATO 3670 each, published

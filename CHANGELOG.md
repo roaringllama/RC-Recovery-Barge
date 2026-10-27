@@ -118,3 +118,8 @@ Tests extended (38): v9.1 constants, hatches, linkage geometry, post, shaft, den
     - Skeg buoyancy moment uses the true centroid of the skeg plates and the shoe.
     - Other battery positions are solved on the deck built for the design position, so the deck is slightly off level there.
     - Steering servo, ESC and receiver positions are taken from v7 as given; the checks report whether they fit.
+
+## 2026-10-27, v9.2 fix-ups after review
+- Receiver moved to X 338 to 385 so the solid F5 tunnel piece (X 388.4) clears it; still inside hatch HC and 7.5 mm forward of the ESCs.
+- Blade lift line attaches 250 mm from the hinge (X 670) and the blade servo bay is X 655 to 705, between cap ribs F7 and F8, so no rib crosses the servo or the line.
+- All 22 checks pass; 51 tests pass.
