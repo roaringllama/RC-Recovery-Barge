@@ -73,6 +73,23 @@ def main():
     render.render(sheets, pdf, OUT)
     print('wrote %s' % build_list.main(OUT, r))
     print('wrote %s and %s' % (pdf, os.path.join(OUT, 'p1.png to p%d.png' % len(sheets))))
+    cad_step()
+
+
+def cad_step():
+    """Optional last step: the CadQuery model, STEP, STL, glTF and the viewer stills (out/cad/). Skipped with a message when a library is missing."""
+    try:
+        import cadquery  # noqa: F401
+        from tools import cad
+    except ImportError as e:
+        print('CAD step skipped: cadquery is not installed (%s)' % e)
+        return
+    cad.export_all()
+    try:
+        from tools import render_stills
+        render_stills.render()
+    except ImportError as e:
+        print('Stills skipped: Playwright is not installed (%s)' % e)
 
 
 if __name__ == '__main__':

@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RC Recovery Barge viewer</title>
+<style>
+  :root { --bg:#d9dcdf; --panel:#f4f5f6; --ink:#1d2328; --muted:#56606a; --line:#b9bfc5; --accent:#245c8f; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; height:100%; background:var(--bg); color:var(--ink); font:14px/1.35 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; overflow:hidden; }
+  #stage { position:fixed; inset:0; }
+  canvas { display:block; width:100%; height:100%; touch-action:none; }
+  .panel { position:fixed; left:12px; right:12px; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:8px 10px; box-shadow:0 2px 10px rgba(0,0,0,.12); }
+  #bar { top:12px; display:flex; flex-wrap:wrap; gap:6px 14px; align-items:center; }
+  .grp { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+  .grp .lbl { font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); margin-right:2px; }
+  button { font:inherit; color:var(--ink); background:#fff; border:1px solid var(--line); border-radius:7px; padding:6px 10px; cursor:pointer; min-height:34px; }
+  button:hover { border-color:var(--accent); }
+  button.on { background:var(--accent); border-color:var(--accent); color:#fff; }
+  #info { bottom:12px; display:flex; flex-wrap:wrap; gap:4px 18px; font-size:13px; }
+  #info b { font-weight:600; }
+  #info span { color:var(--muted); }
+  #msg { position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); color:var(--muted); font-size:15px; text-align:center; padding:0 20px; }
+  @media (min-width: 900px) { .panel { left:16px; right:auto; max-width:calc(100% - 32px); } }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<div id="msg">Loading model</div>
+<div id="bar" class="panel">
+  <div class="grp"><span class="lbl">Blades</span><button id="b-down" class="on">Blades down</button><button id="b-up">Blades up</button></div>
+  <div class="grp"><span class="lbl">Deck</span><button id="d-on" class="on">Deck on</button><button id="d-off">Deck off</button></div>
+  <div class="grp"><span class="lbl">Water</span><button id="w-on" class="on">Water on</button><button id="w-off">Water off</button></div>
+  <div class="grp"><span class="lbl">View</span><button data-view="bow">Bow three-quarter</button><button data-view="stern">Stern three-quarter</button><button data-view="profile">Profile</button><button data-view="under">Underside</button></div>
+</div>
+<div id="info" class="panel"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.min.js"></script>
+<script>
+/* three.js 0.160.0 from cdnjs. cdnjs serves only the core library (no GLTFLoader or OrbitControls),
+   so this page carries a small glTF binary reader and orbit controls of its own. */
+(function () {
+'use strict';
+const qs = new URLSearchParams(location.search);
+const MODEL = qs.get('model') || '../../out/cad/RC_Recovery_Barge_v9.2.glb';
+const INFO = MODEL.replace(/[^\/]*$/, 'render_info.json');
+const SEP = '__';
+const MM = 0.001;                                         // the model is in mm
+
+// ---- renderer, scene, lights ---------------------------------------------------------------------------------------------
+const stage = document.getElementById('stage');
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+stage.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xd9dcdf);
+const camera = new THREE.PerspectiveCamera(32, 1, 0.02, 60);
+
+// a small studio environment so the clear coat and the brass have something to reflect
+(function env() {
+  const e = new THREE.Scene();
+  const g = new THREE.SphereGeometry(10, 32, 16);
+  const col = [];
+  const pos = g.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const t = (pos.getY(i) / 10 + 1) / 2;
+    const c = new THREE.Color().lerpColors(new THREE.Color(0x707880), new THREE.Color(0xf2f5f8), t);
+    col.push(c.r, c.g, c.b);
+  }
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  e.add(new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide })));
+  const panel = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  [[0, 8, 0, 8, .2, 8], [-9, 3, 2, .2, 5, 6], [9, 3, -2, .2, 5, 6]].forEach(p => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(p[3], p[4], p[5]), panel); m.position.set(p[0], p[1], p[2]); e.add(m);
+  });
+  const pm = new THREE.PMREMGenerator(renderer);
+  scene.environment = pm.fromScene(e, 0.02).texture;
+  scene.environmentIntensity = 0.55;
+})();
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0x8a9096, 0.75));
+const key = new THREE.DirectionalLight(0xfff4e6, 2.4);
+key.castShadow = true;
+key.shadow.mapSize.set(2048, 2048);
+key.shadow.radius = 5;
+key.shadow.bias = -0.0004;
+key.shadow.normalBias = 0.002;
+scene.add(key, key.target);
+
+// ---- materials -----------------------------------------------------------------------------------------------------------
+function woodTexture() {
+  const c = document.createElement('canvas'); c.width = 1024; c.height = 256;
+  const g = c.getContext('2d');
+  g.fillStyle = '#d8a96b'; g.fillRect(0, 0, c.width, c.height);
+  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let y = 0; y < c.height; y++) {                      // grain: long thin lines along the plank, slightly wavy
+    const a = 0.025 + rnd() * 0.07;
+    g.strokeStyle = 'rgba(110,70,30,' + a.toFixed(3) + ')';
+    g.lineWidth = 1 + rnd() * 1.5;
+    g.beginPath();
+    const ph = rnd() * 6, amp = 0.6 + rnd() * 1.8;
+    for (let x = 0; x <= c.width; x += 32) g.lineTo(x, y + Math.sin(x / 140 + ph) * amp);
+    g.stroke();
+  }
+  for (let i = 0; i < 22; i++) {                            // a few darker growth rings
+    g.fillStyle = 'rgba(120,75,30,' + (0.03 + rnd() * 0.05).toFixed(3) + ')';
+    g.fillRect(0, rnd() * c.height, c.width, 2 + rnd() * 6);
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
+  return t;
+}
+const wood = woodTexture();
+const balsa = new THREE.MeshPhysicalMaterial({ color: 0xffffff, map: wood, roughness: 0.35, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.08 });
+const matte = new THREE.MeshStandardMaterial({ color: 0x1b1c1e, roughness: 0.9, metalness: 0 });
+const brass = new THREE.MeshStandardMaterial({ color: 0xc9a14a, roughness: 0.28, metalness: 1 });
+const steel = new THREE.MeshStandardMaterial({ color: 0xb4b9bf, roughness: 0.35, metalness: 1 });
+const g10 = new THREE.MeshStandardMaterial({ color: 0x1d4a2c, roughness: 0.55, metalness: 0 });
+const ELEC = {
+  battery: new THREE.MeshStandardMaterial({ color: 0x3a3d42, roughness: 0.6 }),
+  esc: new THREE.MeshStandardMaterial({ color: 0x1f5fc4, roughness: 0.5 }),
+  jacket: new THREE.MeshStandardMaterial({ color: 0x2a6fd0, roughness: 0.45, metalness: 0.2 }),
+  servo: new THREE.MeshStandardMaterial({ color: 0x0c0c0e, roughness: 0.6 }),
+  receiver: new THREE.MeshStandardMaterial({ color: 0xb42a22, roughness: 0.55 }),
+  motor: new THREE.MeshStandardMaterial({ color: 0x8c9096, roughness: 0.4, metalness: 0.8 }),
+  shaft: steel,
+};
+const water = new THREE.ShaderMaterial({
+  transparent: true, depthWrite: false, side: THREE.DoubleSide,
+  uniforms: { colA: { value: new THREE.Color(0x4a9fd8) }, colB: { value: new THREE.Color(0xbfe3f7) } },
+  vertexShader: 'varying vec3 vN; varying vec3 vV; void main(){ vec4 mv = modelViewMatrix * vec4(position,1.0); vN = normalize(normalMatrix * normal); vV = -mv.xyz; gl_Position = projectionMatrix * mv; }',
+  fragmentShader: 'uniform vec3 colA; uniform vec3 colB; varying vec3 vN; varying vec3 vV; void main(){ vec3 n = normalize(vN); vec3 v = normalize(vV); float f = pow(1.0 - abs(dot(n, v)), 3.0); vec3 c = mix(colA, colB, f); gl_FragColor = vec4(c, mix(0.22, 0.6, f)); }',
+});
+
+function materialFor(group, part) {
+  if (group === 'water') return water;
+  if (group === 'nozzles_props') return part.indexOf('prop') === 0 ? brass : part.indexOf('post') === 0 ? steel : matte;
+  if (group === 'blades' || group === 'blades_stowed') return g10;
+  if (group === 'electronics') {
+    if (/battery/.test(part)) return ELEC.battery;
+    if (/esc/.test(part)) return ELEC.esc;
+    if (/jacket/.test(part)) return ELEC.jacket;
+    if (/servo/.test(part)) return ELEC.servo;
+    if (/receiver/.test(part)) return ELEC.receiver;
+    if (/motor/.test(part)) return ELEC.motor;
+    return ELEC.shaft;
+  }
+  return balsa;                                             // hull, deck, caps, push_pad, skegs_shoes
+}
+
+// ---- glTF binary reader (positions, normals, indices, node transforms, names) -------------------------------------------
+function parseGLB(buf) {
+  const dv = new DataView(buf);
+  if (dv.getUint32(0, true) !== 0x46546c67) throw new Error('not a GLB file');
+  let off = 12, json = null, bin = null;
+  while (off < buf.byteLength) {
+    const len = dv.getUint32(off, true), type = dv.getUint32(off + 4, true);
+    const data = buf.slice(off + 8, off + 8 + len);
+    if (type === 0x4e4f534a) json = JSON.parse(new TextDecoder().decode(data)); else if (type === 0x004e4942) bin = data;
+    off += 8 + len;
+  }
+  const CT = { 5126: Float32Array, 5125: Uint32Array, 5123: Uint16Array, 5121: Uint8Array };
+  const NC = { SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4 };
+  function acc(i) {
+    const a = json.accessors[i], bv = json.bufferViews[a.bufferView], n = NC[a.type], T = CT[a.componentType];
+    const start = (bv.byteOffset || 0) + (a.byteOffset || 0), stride = bv.byteStride || n * T.BYTES_PER_ELEMENT;
+    const out = new T(a.count * n);
+    if (stride === n * T.BYTES_PER_ELEMENT) out.set(new T(bin, start, a.count * n));
+    else { const src = new DataView(bin); for (let k = 0; k < a.count; k++) for (let c = 0; c < n; c++) out[k * n + c] = T === Float32Array ? src.getFloat32(start + k * stride + c * 4, true) : src.getUint32(start + k * stride + c * 4, true); }
+    return out;
+  }
+  function meshGeometry(m) {                                // merge all primitives of a mesh into one geometry
+    const P = [], N = [], I = []; let base = 0;
+    m.primitives.forEach(p => {
+      const pos = acc(p.attributes.POSITION), cnt = pos.length / 3;
+      P.push(pos);
+      N.push(p.attributes.NORMAL !== undefined ? acc(p.attributes.NORMAL) : new Float32Array(pos.length));
+      const idx = p.indices !== undefined ? acc(p.indices) : Uint32Array.from({ length: cnt }, (_, k) => k);
+      const sh = new Uint32Array(idx.length); for (let k = 0; k < idx.length; k++) sh[k] = idx[k] + base;
+      I.push(sh); base += cnt;
+    });
+    const cat = (arr, T) => { const n = arr.reduce((s, a) => s + a.length, 0), o = new T(n); let p = 0; arr.forEach(a => { o.set(a, p); p += a.length; }); return o; };
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(cat(P, Float32Array), 3));
+    g.setAttribute('normal', new THREE.BufferAttribute(cat(N, Float32Array), 3));
+    g.setIndex(new THREE.BufferAttribute(cat(I, Uint32Array), 1));
+    return g;
+  }
+  const geoms = {};
+  function build(ni) {
+    const n = json.nodes[ni], o = new THREE.Object3D(); o.name = n.name || '';
+    if (n.matrix) { o.matrix.fromArray(n.matrix); o.matrix.decompose(o.position, o.quaternion, o.scale); }
+    if (n.translation) o.position.fromArray(n.translation);
+    if (n.rotation) o.quaternion.fromArray(n.rotation);
+    if (n.scale) o.scale.fromArray(n.scale);
+    if (n.mesh !== undefined) { geoms[n.mesh] = geoms[n.mesh] || meshGeometry(json.meshes[n.mesh]); o.userData.geometry = geoms[n.mesh]; }
+    (n.children || []).forEach(c => o.add(build(c)));
+    return o;
+  }
+  const root = new THREE.Group();
+  json.scenes[json.scene || 0].nodes.forEach(ni => root.add(build(ni)));
+  return root;
+}
+
+// planar wood mapping from the model position (CAD axes): grain runs along the boat (X)
+function addWoodUV(geom) {
+  const p = geom.attributes.position, n = geom.attributes.normal, uv = new Float32Array(p.count * 2);
+  for (let i = 0; i < p.count; i++) {
+    const c = [p.getX(i), p.getY(i), p.getZ(i)], nn = [n.getX(i), n.getY(i), n.getZ(i)];   // geometry is in CAD axes (mm); the node tree rotates it to Y-up
+    const ax = Math.abs(nn[0]), ay = Math.abs(nn[1]), az = Math.abs(nn[2]);
+    const across = az >= ay && az >= ax ? c[1] : c[2];     // up faces: across the boat; side faces: height
+    uv[i * 2] = c[0] / 420; uv[i * 2 + 1] = across / 70;
+  }
+  geom.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+}
+
+// ---- orbit controls ------------------------------------------------------------------------------------------------------
+const target = new THREE.Vector3(), sph = new THREE.Spherical(1, 1, 1);
+let want = null;                                          // animated camera goal
+let dirty = true;                                         // draw only when something changed
+function applyCamera() { dirty = true; sph.phi = Math.max(0.04, Math.min(Math.PI - 0.04, sph.phi)); sph.radius = Math.max(0.12, Math.min(8, sph.radius)); camera.position.setFromSpherical(sph).add(target); camera.lookAt(target); }
+(function controls() {
+  const el = renderer.domElement, ptrs = new Map(); let last = null;
+  function pan(dx, dy) {
+    const k = sph.radius * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2) * 2 / el.clientHeight;
+    const r = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 0), u = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 1);
+    target.addScaledVector(r, -dx * k).addScaledVector(u, dy * k);
+  }
+  el.addEventListener('pointerdown', e => { el.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY, b: e.button }); want = null; last = null; });
+  el.addEventListener('pointerup', e => { ptrs.delete(e.pointerId); last = null; });
+  el.addEventListener('pointercancel', e => { ptrs.delete(e.pointerId); last = null; });
+  el.addEventListener('pointermove', e => {
+    const p = ptrs.get(e.pointerId); if (!p) return;
+    const dx = e.clientX - p.x, dy = e.clientY - p.y;
+    if (ptrs.size === 1) {
+      if (p.b === 2 || e.shiftKey) pan(dx, dy); else { sph.theta -= dx * 0.008; sph.phi -= dy * 0.008; }
+    } else if (ptrs.size === 2) {
+      const o = [...ptrs.entries()].find(([id]) => id !== e.pointerId)[1];
+      const d0 = Math.hypot(p.x - o.x, p.y - o.y), d1 = Math.hypot(e.clientX - o.x, e.clientY - o.y);
+      if (d0 > 0 && d1 > 0) sph.radius *= d0 / d1;
+      pan(dx / 2, dy / 2);
+    }
+    p.x = e.clientX; p.y = e.clientY; applyCamera();
+  });
+  el.addEventListener('wheel', e => { e.preventDefault(); sph.radius *= Math.exp(e.deltaY * 0.001); want = null; applyCamera(); }, { passive: false });
+  el.addEventListener('contextmenu', e => e.preventDefault());
+})();
+
+// ---- the boat ------------------------------------------------------------------------------------------------------------
+const groups = {};                                        // group name -> [Object3D]
+const state = { blades: qs.get('blades') !== 'up', deck: qs.get('deck') !== '0', water: qs.get('water') !== '0' };
+let boat = null, center = new THREE.Vector3(), radius = 1;
+// glTF node tree rotates Z-up to Y-up; CAD (x, y, z) sits at three (x, z, -y) in meters
+const fromCad = (x, y, z) => new THREE.Vector3(x * MM, z * MM, -y * MM);
+
+function applyState() {
+  dirty = true;
+  const vis = (g, v) => (groups[g] || []).forEach(o => { o.visible = v; });
+  vis('blades', state.blades); vis('blades_stowed', !state.blades);
+  vis('deck', state.deck); vis('caps', state.deck);
+  vis('electronics', !state.deck);
+  vis('water', state.water);
+  (groups.caps || []).forEach(o => { o.material = state.blades ? balsa : capGlass; });   // blades up: see the stowed blade through the cap
+  setOn('b-down', state.blades); setOn('b-up', !state.blades);
+  setOn('d-on', state.deck); setOn('d-off', !state.deck);
+  setOn('w-on', state.water); setOn('w-off', !state.water);
+}
+const capGlass = new THREE.MeshPhysicalMaterial({ color: 0xe7c48f, map: wood, roughness: 0.3, clearcoat: 1, transparent: true, opacity: 0.32, depthWrite: false });
+function setOn(id, on) { document.getElementById(id).classList.toggle('on', !!on); }
+
+const VIEWS = { bow: [1, 0.95, 0.5], stern: [-1, 0.95, 0.45], profile: [0.02, 1, 0.07], under: [0.45, 0.65, -1] };
+function setView(name, animate) {
+  const d = VIEWS[name]; if (!d) return;
+  const v = fromCad(d[0], d[1], d[2]).normalize();
+  const goal = new THREE.Spherical().setFromVector3(v); goal.radius = radius * 3.1;
+  document.querySelectorAll('[data-view]').forEach(b => b.classList.toggle('on', b.dataset.view === name));
+  target.copy(center);
+  if (!animate) { sph.copy(goal); want = null; applyCamera(); return; }
+  let dth = goal.theta - sph.theta; dth = Math.atan2(Math.sin(dth), Math.cos(dth)); goal.theta = sph.theta + dth;
+  want = { goal, t0: performance.now(), from: sph.clone(), tfrom: target.clone() };
+}
+
+function layout() {
+  const w = stage.clientWidth, h = stage.clientHeight;
+  dirty = true; renderer.setSize(w, h, false); camera.aspect = w / h;
+  camera.fov = w / h < 0.8 ? 46 : 32;                       // phone width: wider lens so the boat fits
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', layout);
+
+function frame(now) {
+  if (want) {
+    const k = Math.min(1, (now - want.t0) / 650), e = k * k * (3 - 2 * k);
+    sph.radius = want.from.radius + (want.goal.radius - want.from.radius) * e;
+    sph.phi = want.from.phi + (want.goal.phi - want.from.phi) * e;
+    sph.theta = want.from.theta + (want.goal.theta - want.from.theta) * e;
+    applyCamera(); if (k >= 1) want = null;
+  }
+  if (dirty) { dirty = false; renderer.render(scene, camera); }
+  requestAnimationFrame(frame);
+}
+
+function setInfo(j) {
+  const el = document.getElementById('info');
+  if (!j) { el.innerHTML = '<span>Revision and waterline numbers not found next to the model.</span>'; return; }
+  const items = [['Revision', j.rev], ['Weight', j.weight_g.toFixed(0) + ' g'], ['Stern draft', j.stern_draft_mm.toFixed(1) + ' mm'], ['Bow draft', j.bow_draft_mm.toFixed(1) + ' mm'],
+    ['Water over nozzle top', j.over_nozzle_mm.toFixed(1) + ' mm'], ['Nozzle margin after ' + j.trough_mm.toFixed(0) + ' mm trough', j.nozzle_margin_mm.toFixed(1) + ' mm']];
+  el.innerHTML = items.map(i => '<div><span>' + i[0] + '</span> <b>' + i[1] + '</b></div>').join('');
+}
+
+async function init() {
+  layout();
+  const [buf, info] = await Promise.all([
+    fetch(MODEL).then(r => { if (!r.ok) throw new Error(MODEL + ' ' + r.status); return r.arrayBuffer(); }),
+    fetch(INFO).then(r => r.ok ? r.json() : null).catch(() => null),
+  ]);
+  setInfo(info);
+  boat = parseGLB(buf);
+  boat.scale.setScalar(MM);
+  boat.updateMatrixWorld(true);
+  boat.traverse(o => {
+    const geom = o.userData.geometry; if (!geom) return;
+    const name = o.name, i = name.indexOf(SEP); if (i < 0) return;
+    const grp = name.slice(0, i), part = name.slice(i + SEP.length);
+    const mesh = new THREE.Mesh(geom, materialFor(grp, part));
+    mesh.userData = { group: grp, part };
+    if (mesh.material === balsa) { if (!geom.attributes.uv) addWoodUV(geom); }
+    mesh.castShadow = grp !== 'water'; mesh.receiveShadow = grp !== 'water';
+    o.add(mesh);
+    (groups[grp] = groups[grp] || []).push(mesh);
+  });
+  scene.add(boat);
+  const box = new THREE.Box3();
+  ['hull', 'deck', 'caps', 'skegs_shoes', 'nozzles_props', 'push_pad'].forEach(g => (groups[g] || []).forEach(m => box.expandByObject(m)));
+  box.getCenter(center); radius = box.getSize(new THREE.Vector3()).length() / 2;
+  key.position.copy(center).add(new THREE.Vector3(-0.5, 1.4, 0.9).multiplyScalar(radius * 1.8));
+  key.target.position.copy(center);
+  const sc = key.shadow.camera; sc.left = sc.bottom = -radius * 1.3; sc.right = sc.top = radius * 1.3; sc.near = 0.1; sc.far = radius * 8; sc.updateProjectionMatrix();
+  applyState();
+  setView(VIEWS[qs.get('preset')] ? qs.get('preset') : 'bow', false);
+  document.getElementById('msg').remove();
+  requestAnimationFrame(frame);
+  window.__viewer = { ready: true, setView, state, applyState, groups: Object.keys(groups) };
+}
+
+document.getElementById('b-down').onclick = () => { state.blades = true; applyState(); };
+document.getElementById('b-up').onclick = () => { state.blades = false; applyState(); };
+document.getElementById('d-on').onclick = () => { state.deck = true; applyState(); };
+document.getElementById('d-off').onclick = () => { state.deck = false; applyState(); };
+document.getElementById('w-on').onclick = () => { state.water = true; applyState(); };
+document.getElementById('w-off').onclick = () => { state.water = false; applyState(); };
+document.querySelectorAll('[data-view]').forEach(b => { b.onclick = () => setView(b.dataset.view, true); });
+
+init().catch(err => { const m = document.getElementById('msg'); if (m) m.textContent = 'Could not load the model: ' + err.message; window.__viewer = { error: String(err) }; });
+})();
+</script>
+</body>
+</html>

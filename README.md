@@ -29,6 +29,9 @@ Axes: X from the transom forward, Z up from the keel, Y to port from the centerl
 | `sheets/` | SVG sheet library (`lib.py`, `tbl.py`, `render.py`) and the eleven sheets of the set `a000.py` (cover, two pages), `a101.py`, `a103.py`, `a104.py`, `a301.py`, `a401.py`, `a501.py`, `a502.py`, `a503.py`, `a601.py` (and `wtbl.py`, the schedule table helper). `a004.py` (blade sweep study) is a study sheet that is not in the set: `build.py` does not build it and A-000 does not list it; the file is kept |
 | `model/parts.py`, `model/references.py`, `model/schedules.py` | Parts table (vendor data, published prices and masses), references, and the computed schedules (panels, sealing, joints, frames, hatches) |
 | `tools/build_list.py` | Writes the build list workbook |
+| `tools/cad.py` | CadQuery model of the boat from the one model (hull shell, deck, caps, skegs and shoes, nozzles, props, blades, electronics, water plane); exports STEP, STL, glTF and the manifest |
+| `tools/viewer/index.html` | Self-contained three.js viewer for the glTF (materials by part group, blades, deck and water toggles, four view presets) |
+| `tools/render_stills.py` | Playwright renders the four viewer presets to PNG |
 | `build.py` | Runs everything |
 | `tests/` | pytest suite |
 | `out/` | Build products (git-ignored) |
@@ -37,7 +40,7 @@ Axes: X from the transom forward, Z up from the keel, Y to port from the centerl
 
 ## Running
 
-Requires Python 3 with numpy, scipy, Pillow, Playwright (Chromium already installed) and pytest.
+Requires Python 3 with numpy, scipy, Pillow, Playwright (Chromium already installed), pytest, and for the CAD step CadQuery 2.8 (`pip install cadquery`). trimesh (`pip install trimesh`) is only a fallback for converting STL to glTF if CadQuery's own glTF export is not available; the current export does not need it.
 
     python3 build.py      # prints the checks report, then renders the sheets
     python3 -m pytest     # model tests
@@ -49,6 +52,31 @@ Requires Python 3 with numpy, scipy, Pillow, Playwright (Chromium already instal
 - `blade_sweep.csv`, the blade variant sweep at the design battery position (475) and the first alternate (520)
 - `checks.txt`, the checks report
 - `weights.csv`, the weight and balance items
+
+## CAD model, STEP, glTF and viewer
+
+`build.py` ends with an optional CAD step (skipped with a message if CadQuery is missing); it can also be run alone:
+
+    python3 -m tools.cad              # out/cad/ model files
+    python3 -m tools.render_stills    # out/cad/still_<preset>_<REV>.png at 1600 x 1000
+
+`tools/cad.py` builds the boat from `design.py` and `model/geometry.py` at the design battery position (475) and the hydrostatic waterline, and writes to `out/cad/` (git-ignored):
+
+- `RC_Recovery_Barge_<REV>.step`: the whole assembly with named, colored parts (`<group>__<part>`)
+- `RC_Recovery_Barge_<REV>.glb`: the same assembly as glTF binary, per-part names kept
+- `<group>_<REV>.stl`: one STL per group: hull, deck, caps, skegs_shoes, nozzles_props, blades, blades_stowed, push_pad, electronics, water
+- `manifest.json`: each group with its parts, volume (cm3), bounding box (mm) and material tag
+- `render_info.json`: REV, weight, stern and bow draft, water over the nozzle top and the margin after the trough (read by the viewer)
+- `still_bow|stern|profile|under_<REV>.png`: the four viewer presets, blades down, water on
+
+The hull is a shell (outer skin lofted through sections with the bilge rounds, minus the inside offset by `SKIN_T`) with the deck skin as a separate part, so the deck can be removed to show the electronics; the solid sponson used for the volume test is `tools.cad.hull_solid`. Render-only values (nozzle bore, propeller blade drawing, cap and tip fillets) are in the CAD block at the end of `design.py`. Not modeled: frames, hatches, trunk walls (only a slot in the floor), pushrod and tie bar.
+
+To open the viewer, serve the repository root and open the page (it loads `../../out/cad/RC_Recovery_Barge_<REV>.glb`; `?model=` takes another path, `?preset=bow|stern|profile|under`, `?blades=up`, `?deck=0` and `?water=0` set the start state):
+
+    python3 -m http.server 8000
+    # then open http://localhost:8000/tools/viewer/index.html
+
+cdnjs hosts only the core three.js build (0.160.0), not GLTFLoader or OrbitControls, so the page includes a small glTF reader and orbit controls of its own and loads nothing else from the network.
 
 The combined PDF keeps the name `RC_Recovery_Cat_Drawings_<REV>.pdf`. Issued PDFs are kept in `pdf/`, which git ignores.
 

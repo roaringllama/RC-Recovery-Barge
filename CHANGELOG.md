@@ -1,5 +1,12 @@
 # Changelog
 
+## CadQuery model, STEP and glTF export, three.js viewer and still renders
+
+- `tools/cad.py`: the boat as CadQuery solids from the model at the design battery position (hull shell with bilge rounds and bow tip fillets, deck skins, tunnel roof, center and aft deck, push pad, bow caps with 3 mm edge rounds, skegs with edge rounds, shoes and lofted root fillets, nozzle rings, props with four flat blades, posts, extended and stowed blades, electronics, water plane at the solved waterline). Exports STEP, one STL per group, glb, `manifest.json` and `render_info.json` to `out/cad/`.
+- `tools/viewer/index.html`: three.js 0.160.0 from cdnjs, materials by part group, blades down and up, deck on and off, water on and off, four view presets, revision and waterline numbers. cdnjs has no GLTFLoader or OrbitControls, so the page has its own glTF reader and orbit controls.
+- `tools/render_stills.py`: Playwright renders the four presets (1600 x 1000) to `out/cad/`. `build.py` runs the CAD step and the stills last, and skips them with a message when CadQuery or Playwright is missing.
+- `design.py`: a CAD block of render-only values (ASSUMED). Tests: `tests/test_cad.py` (hull solid volume within 5 percent of plan area times deck height, STEP and GLB written).
+
 ## 2026-10-27, v9.2: owner review
 
 All design changes below are tagged in `design.py` (APPROVED, owner 2026-10-27 unless noted). `REV` is v9.2.

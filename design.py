@@ -254,3 +254,22 @@ STEER_TRAVEL_DEG = 35.0         # nozzle steering travel each side of center (fo
 PUSHROD_BELLOWS_D = None        # pushrod bellows size is not published and the pushrod route is not designed, PENDING
 COOL_PICKUP_X = None            # M5 water pickup X on the sponson bottom, not decided (v3 used the prop wash, which no longer exists), PENDING
 COOL_OUTLET_X = None            # M6 water outlet X through the sponson side, not decided, PENDING
+
+
+# ---- CAD model and render (tools/cad.py; render only, not in the weights, hydrostatics or checks) ----------------------------------
+NOZ_BORE_LESS = 6.0             # nozzle bore diameter = NOZ_OD less this (3 mm wall), render only, ASSUMED
+CAD_CAP_R = 3.0                 # fillet on the bow cap edges, render only, ASSUMED
+CAD_TIP_R = 5.0                 # fillet on the two vertical bow tip edges of each sponson (the 20 mm tip face), render only, ASSUMED
+CAD_PROP_BLADES = 4             # propeller blade count as drawn, render only, ASSUMED
+CAD_PROP_HUB_D = 10.0           # propeller hub diameter as drawn, render only, ASSUMED
+CAD_PROP_CHORD = 10.0           # propeller blade chord as drawn, render only, ASSUMED
+CAD_PROP_BLADE_T = 1.2          # propeller blade thickness as drawn, render only, ASSUMED
+CAD_PROP_PITCH_DEG = 25.0       # propeller blade pitch as drawn, render only, ASSUMED
+CAD_SKEG_FILLET_STATIONS = 8    # stations along the skeg for the lofted root fillet, numerical setting
+CAD_FILLET_SUBSAMPLE = 4        # keep every n-th point of the fillet section polygon, numerical setting
+CAD_EPS = 1e-3                  # least flat on a bilge section so every section wire has the same edge count, numerical setting
+CAD_WATER_T = 1.0               # water plane thickness, render only
+CAD_WATER_SPAN = 1.4            # water plane extends this many LOA and BEAM multiples around the boat, render only
+CAD_STL_TOL = 0.05              # STL linear tolerance (mm), numerical setting
+CAD_STL_ANG = 0.1               # STL angular tolerance (rad), numerical setting
+CAD_TRUNK_SLOT_FLOOR = True     # cut the blade trunk slot through the hull floor so the extended blade passes, render only
