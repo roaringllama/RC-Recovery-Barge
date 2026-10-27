@@ -152,6 +152,15 @@ OTHER_ESTIMATES = [
 TRUNK_MASS = 28.0               # both trunks, ESTIMATE
 TOWER_MASS = 30.0               # tower shell, ESTIMATE
 BLADE_MECH_MASS = 80.0          # blade servo, spool and line, now carried in the bow cap at the servo center X, ESTIMATE
+BLADE_MATERIALS = {               # daggerboard sheet options: thickness mm, density g/cm3, glass both sides (True adds GLASS_OUT per side)
+    'balsa_1_8':  dict(t=3.175, rho=0.144, glass=True,  note='1/8 in balsa, glassed; floats, needs a spring or weight to stay down'),
+    'g10_1_5':    dict(t=1.5,   rho=1.9,   glass=False, note='1.5 mm G10 fiberglass sheet; sinks, stiff, no glassing needed'),
+    'g10_2':      dict(t=2.0,   rho=1.9,   glass=False, note='2 mm G10 fiberglass sheet; sinks, stiffer, heavier'),
+    'pc_2':       dict(t=2.0,   rho=1.2,   glass=False, note='2 mm polycarbonate; barely sinks'),
+    'alu_1_5':    dict(t=1.5,   rho=2.7,   glass=False, note='1.5 mm aluminum; sinks hard, heaviest'),
+}                                 # densities are handbook values, ASSUMED; owner asked for a denser blade so gravity deploys and holds it (2026-10-27)
+BLADE_MATERIAL = 'g10_1_5'        # PENDING: owner to choose; G10 1.5 mm proposed. The trunk width TRUNK_W stays as is.
+BLADE_SERVO_QTY = 1               # one blade servo (port cap) drives both blades through a cross line between the caps behind the push pad, APPROVED (owner, 2026-10-27); cross line route PENDING
 
 # ---- steering linkage (ASSUMED unless noted; geometry derives the points) ------------------------
 # One servo on its side on the tunnel roof; its horn turns in a vertical plane, so the pushrod runs fore and aft at height ZR

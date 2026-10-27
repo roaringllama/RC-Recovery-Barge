@@ -81,11 +81,12 @@ def blade_items(zd, rho=None):
     cx, _ = G.blade_centroid(extended=False)
     A = G.blade_area()
     sq_m = A / 1000 / 1000
-    per = A * D.SKIN_T * _K + 2 * sq_m * D.GLASS_OUT      # skin plus glass both sides
+    bm = D.BLADE_MATERIALS[D.BLADE_MATERIAL]
+    per = A * bm['t'] * bm['rho'] / 1000 + (2 * sq_m * D.GLASS_OUT if bm['glass'] else 0)   # sheet plus glass both sides when the material needs it
     b = G.blade_params()
     tx0, tx1 = G.trunk_x()
     h = G.housing(zd)
-    it = [('Blades', 'Daggerboards (2): R%.0f %.0f deg sector, %.3f mm, glass both sides' % (b['R'], b['sector_deg'], D.SKIN_T), 2 * per, cx),
+    it = [('Blades', 'Daggerboards (2): R%.0f %.0f deg sector, %s %.2f mm%s' % (b['R'], b['sector_deg'], D.BLADE_MATERIAL, bm['t'], ', glass both sides' if bm['glass'] else ''), 2 * per, cx),
           ('Blades', 'Trunks (2), X %.0f to %.0f' % (tx0, tx1), D.TRUNK_MASS, (tx0 + tx1) / 2)]
     if h is None:
         pass                                              # stowed blade stays below the deck underside: no housing

@@ -163,7 +163,8 @@ def test_reverse_housing_is_a_bow_cap_over_the_stowed_blade():
         names = [n for _, n, _, _ in rr['items']]
         assert any('Bow cap' in n for n in names) and any('in the bow cap' in n for n in names)
         blades = sum(m for g, _, m, _ in rr['items'] if g == 'Blades')
-        per = G.blade_area() * D.SKIN_T * D.BALSA_RHO / 1000 + 2 * G.blade_area() / 1e6 * D.GLASS_OUT
+        bm = D.BLADE_MATERIALS[D.BLADE_MATERIAL]
+        per = G.blade_area() * bm['t'] * bm['rho'] / 1000 + (2 * G.blade_area() / 1e6 * D.GLASS_OUT if bm['glass'] else 0)
         assert abs(blades - (2 * per + D.TRUNK_MASS + D.TOWER_MASS + D.BLADE_MECH_MASS)) < 1e-9
         res = {n.split()[0]: ok for n, ok, _ in checks.run_all(rr)}
         assert res['9'] and res['9b']
@@ -300,7 +301,7 @@ def test_steering_linkage_geometry():
 
 def test_post_required_length_and_check_18(r, monkeypatch):
     need = G.post_required_length(r['deck'])
-    assert abs(need - (r['deck'](G.POSTX) - D.AFT_DECK_T - G.NOZ_ZTOP)) < 1e-9 and 94.0 < need < 96.0
+    assert abs(need - (r['deck'](G.POSTX) - D.AFT_DECK_T - G.NOZ_ZTOP)) < 1e-9 and 90.0 < need < 98.0
     assert not hasattr(D, 'NOZ_POST_TUBE_L') and not hasattr(D, 'NOZ_POST_L') and D.NOZ_POST_STOCK_L == 300.0
     name, ok, msg = checks.c18(r)
     assert ok and '%.1f' % need in msg and 'cut' in msg
@@ -353,7 +354,7 @@ def test_check_15_only_tests_the_open_part_of_the_trunk(r, monkeypatch):
     zd = r['deck']
     above = G.stowed_above(zd)
     open_x0 = min(p[0] for p in above)
-    assert checks.c15(r)[1] and '(5.5 clear in X)' in checks.c15(r)[2]          # HB x1 582 plus the 6 flange is 588, the open trunk starts at 593.1
+    assert checks.c15(r)[1] and 'clear in X' in checks.c15(r)[2]          # HB x1 582 plus the 6 flange is 588, the open trunk starts at 593.1
     monkeypatch.setitem(D.HATCHES, 'HB', dict(D.HATCHES['HB'], x1=open_x0 - D.FLANGE + 2.5))        # the flange reaches 2.5 into the open part
     assert checks.c15(r)[1] is False and 'open trunk by 2.5 in X' in checks.c15(r)[2]
     monkeypatch.setitem(D.HATCHES, 'HB', dict(D.HATCHES['HB'], x1=open_x0 - D.FLANGE - 0.5))

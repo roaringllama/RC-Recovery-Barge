@@ -123,3 +123,7 @@ Tests extended (38): v9.1 constants, hatches, linkage geometry, post, shaft, den
 - Receiver moved to X 338 to 385 so the solid F5 tunnel piece (X 388.4) clears it; still inside hatch HC and 7.5 mm forward of the ESCs.
 - Blade lift line attaches 250 mm from the hinge (X 670) and the blade servo bay is X 655 to 705, between cap ribs F7 and F8, so no rib crosses the servo or the line.
 - All 22 checks pass; 51 tests pass.
+
+## 2026-10-27, v9.2 blade material and single servo
+- Daggerboard material is now a choice (BLADE_MATERIALS); default G10 1.5 mm (PENDING), which sinks so gravity deploys and holds the blade. Blades 87 g each instead of 20 g; weight 3,169 g, nozzle margin 11.4 mm at 475.
+- One blade servo drives both blades through a cross line between the caps (route PENDING).
