@@ -167,3 +167,6 @@ Tests extended (38): v9.1 constants, hatches, linkage geometry, post, shaft, den
 
 ## 2026-10-27, v9.3 viewer fix
 - The viewer loaded the v9.2 model by default, so the v9.3 stills showed the old bow. It now follows the revision (rev query parameter, default from the build) and the push bar is drawn in ply color. New close-up bow preset for the stills.
+
+## 2026-10-27, balsa order follows the cutting plan
+- The nesting layouts need 35 sheets of 1/8 x 3 x 36 balsa; the area estimate said 23. The order now takes the larger of the two (35), with the note showing both.

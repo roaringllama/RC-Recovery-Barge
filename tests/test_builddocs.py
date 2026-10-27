@@ -96,7 +96,7 @@ def test_balsa_area_against_the_order(tb, nst):
     back = sum(p.qty * p.length * p.width for p in tb.parts if p.mark.startswith('BK-'))
     by_outline = a['by_net'] + back * (1 + D.WASTE) / sheet           # outlines plus seam backing, with the order's waste factor
     print('balsa: order %s, outlines + backing %.2f, bounding rectangles %.2f, nested %d' % (c['order'], by_outline, a['with_waste'], c['nested']))
-    assert abs(by_outline - c['order']) <= 3.0              # the cut list adds parts the order's area sum leaves out (skeg cores, aft deck, push bar, overhang)
+    assert c['order'] >= c['nested'] and c['order'] >= by_outline - 3.0   # the order follows the cutting plan when it needs more than the area estimate
     assert c['nested'] >= by_outline                        # nesting cannot beat the area bound
     assert c['nested'] >= c['derived'] - 1
 
@@ -308,6 +308,6 @@ def test_make_writes_everything(tmp_path):
     res = make.main(str(tmp_path), log=None)
     for name, (path, pages) in res['files'].items():
         assert os.path.exists(path), name
-    assert res['balsa']['nested'] >= 1 and res['balsa']['order'] == 23
+    assert res['balsa']['nested'] >= 1 and res['balsa']['order'] >= res['balsa']['nested']
     assert res['templates'] == len(M.table().templates)
     assert os.path.exists(str(tmp_path / 'part_marks.csv'))

@@ -63,16 +63,27 @@ def hull_quantities(r=None):
     strips = math.ceil(sc['back_len'] / D.STICK_L)
     per_sheet = math.floor(D.STOCK_W / D.BACK_W)
     n_sheets = math.ceil(net * w / sheet + strips / per_sheet)
+    nested = None
+    try:                                                    # the cutting plan (tools/builddocs) is the real count when it is available
+        from tools.builddocs import nest as _nest
+        from model import hydro as _hydro, partmarks as _pm
+        _tb = _pm.build(_hydro.design())
+        nested = len(_nest.nest_all(_tb).bins.get('balsa', []))
+    except Exception:
+        nested = None
+    area_sheets = n_sheets
+    if nested:
+        n_sheets = max(n_sheets, nested)
     out = {}
     out['balsa'] = (n_sheets,
                     'Net sheet area %.0f cm2 = skin %.0f (A-103, %.2f m2) + trunks and bow caps %.0f + frames %.0f + hatch lids %.0f + plugs (%d layers) %.0f '
                     '+ motor mounts %.0f + battery rails %.0f. x %.2f waste = %.0f cm2 / sheet %.0f cm2 (%.1f x %.1f in) = %.2f sheets. Seam backing: %.1f m '
                     '(A-501 J5, waste included) = %d strips of %.2f mm, %d strips per %.1f mm sheet = %.2f sheets. Total %.2f, rounded up to %d. '
-                    'Area estimate; real nesting needs a cutting plan.' % (
+                    'Cutting plan (nesting layouts) needs %s sheets; the order uses the larger of the two.' % (
                         net / 100, hull / 100, hull / 1e6, trunk_cap / 100, frames / 100, lids / 100, D.PLUG_LAYERS, plugs / 100, mounts / 100, rails / 100,
                         w, net * w / 100, sheet / 100, D.STICK_L / 25.4, D.STOCK_W / 25.4, net * w / sheet,
                         sc['back_len'] / 1000, strips, D.BACK_W, per_sheet, D.STOCK_W, strips / per_sheet,
-                        net * w / sheet + strips / per_sheet, n_sheets))
+                        net * w / sheet + strips / per_sheet, area_sheets, str(nested) if nested else 'n/a'))
     tri = sc['tri_len'] + sc['wedge_len']
     out['stock'] = (math.ceil(tri / D.STICK_L),
                     'Triangular blocking %.1f m (A-501: raw %.1f m + rim blocking %.1f m, /2 because each 3/8 stick rips into two, x %.2f waste = %.1f m) '
