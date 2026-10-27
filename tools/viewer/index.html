@@ -256,6 +256,7 @@ function applyCamera() { dirty = true; sph.phi = Math.max(0.04, Math.min(Math.PI
 
 // ---- the boat ------------------------------------------------------------------------------------------------------------
 const groups = {};                                        // group name -> [Object3D]
+if (qs.get('ui') === '0') { document.getElementById('bar').style.display = 'none'; document.getElementById('info').style.display = 'none'; }
 const state = { blades: qs.get('blades') !== 'up', deck: qs.get('deck') !== '0', water: qs.get('water') !== '0' };
 let boat = null, center = new THREE.Vector3(), radius = 1;
 // glTF node tree rotates Z-up to Y-up; CAD (x, y, z) sits at three (x, z, -y) in meters
@@ -280,7 +281,7 @@ const VIEWS = { bow: [1, 0.95, 0.5], stern: [-1, 0.95, 0.45], profile: [0.02, 1,
 function setView(name, animate) {
   const d = VIEWS[name]; if (!d) return;
   const v = fromCad(d[0], d[1], d[2]).normalize();
-  const goal = new THREE.Spherical().setFromVector3(v); goal.radius = radius * (name === 'bowclose' ? 1.1 : 3.1);
+  const goal = new THREE.Spherical().setFromVector3(v); goal.radius = radius * (name === 'bowclose' ? 1.1 : 3.1) * (parseFloat(qs.get('zoom')) || 1);
   document.querySelectorAll('[data-view]').forEach(b => b.classList.toggle('on', b.dataset.view === name));
   target.copy(center); if (name === 'bowclose') target.add(new THREE.Vector3(radius * 0.8, 0, 0));
   if (!animate) { sph.copy(goal); want = null; applyCamera(); return; }

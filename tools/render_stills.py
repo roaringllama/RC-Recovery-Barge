@@ -20,7 +20,10 @@ import design as D
 
 OUT_DIR = os.path.join(ROOT, 'out', 'cad')
 PRESETS = ('bow', 'stern', 'profile', 'under', 'bowclose')
-STILL_W, STILL_H = 1600, 1000
+from sheets.lib import W as _SW, H as _SH
+# same aspect as the drawing area of a sheet (inside the frame, above the title block), so the render fills an A-00R page
+STILL_W = 1920
+STILL_H = int(round(STILL_W * (_SH - 8.0 - 30.0 - 25.0) / (_SW - 16.0)))
 LOAD_MS = 120000
 SETTLE_MS = 1500
 
@@ -52,7 +55,7 @@ def render(out_dir=OUT_DIR, extra='', suffix='', log=print):
             logs = []
             page.on('console', lambda m: logs.append(m.text))
             page.on('pageerror', lambda e: logs.append('PAGEERROR ' + str(e)))
-            url = 'http://127.0.0.1:%d/tools/viewer/index.html?blades=down&water=1&rev=%s%s' % (port, D.REV, extra)
+            url = 'http://127.0.0.1:%d/tools/viewer/index.html?blades=down&water=1&ui=0&zoom=0.78&rev=%s%s' % (port, D.REV, extra)
             page.goto(url, wait_until='commit', timeout=LOAD_MS)
             page.wait_for_function('window.__viewer && (window.__viewer.ready || window.__viewer.error)', timeout=LOAD_MS)
             err = page.evaluate('window.__viewer.error || null')

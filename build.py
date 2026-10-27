@@ -13,7 +13,7 @@ sys.path.insert(0, ROOT)
 import design as D
 from model import hydro, checks, weights, variants, study, geometry
 from tools import build_list
-from sheets import a000, a101, a103, a104, a301, a401, a501, a502, a503, a601, render
+from sheets import a000, a00r, a101, a103, a104, a301, a401, a501, a502, a503, a601, render
 
 OUT = os.path.join(ROOT, 'out')
 
@@ -69,16 +69,16 @@ def main():
     for q in plans:
         print('DECK PLAN %s%s: %.1f g, LCG %.1f, stern draft %.2f, bow draft %.2f, trim %.3f deg bow down, over nozzle top %.1f, aft deck beam margin %.2f (deflection %.2f mm), checks failed: %s' % (
             q['plan'], ' (default)' if q['plan'] == D.DECK_PLAN else '', q['W'], q['G'], q['d0'], q['bow'], -q['trim'], q['over'], q['beam_margin'], q['deflection'], ', '.join(q['failed']) or 'none'))
+    cad_step()
     body = [a101.build(r, alts), a103.build(r), a104.build(r), a301.build(r, alts), a401.build(r, alts), a501.build(r),
             a502.build(r), a503.build(r), a601.build(r, alts, results, srows, plans)]
     index = [a000.SELF + (a000.CONTENTS,)] + [(sh.no, sh.title, sh.scale, sh.sub) for sh in body]
-    sheets = a000.build(r, index) + body
+    sheets = a00r.build() + a000.build(r, index) + body
     pdf = os.path.join(OUT, 'RC_Recovery_Cat_Drawings_%s.pdf' % D.REV)
     render.render(sheets, pdf, OUT)
     print('wrote %s' % build_list.main(OUT, r))
     print('wrote %s and %s' % (pdf, os.path.join(OUT, 'p1.png to p%d.png' % len(sheets))))
     builddocs_step(r)
-    cad_step()
 
 
 def builddocs_step(r):
