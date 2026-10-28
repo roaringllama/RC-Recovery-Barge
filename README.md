@@ -10,6 +10,7 @@ Every design decision is a named constant in `design.py`, with a one-line commen
 - PENDING: the owner has not decided it
 - ASSUMED: no published source
 - ESTIMATE: weight guessed
+- PROPOSED: a concept value offered for review (the optional line launcher, A-701)
 
 Nothing numeric appears anywhere else, except layout positions on the sheets. `model/geometry.py` and the other model files contain no literals beyond 0, 1, 2 and the unit factor 1000 (a test enforces this). To change the design, edit `design.py` and run `build.py`. When something does not fit, the checks report says so; do not change a value just to make a check pass.
 
@@ -26,7 +27,7 @@ Axes: X from the transom forward, Z up from the keel, Y to port from the centerl
 | `model/checks.py` | Interference and fit checks, each returns (name, pass, message) |
 | `model/study.py` | Prop and nozzle study: `alternate()` runs the whole model again with `PROP_D_ALT` and `NOZ_OD_ALT` |
 | `model/variants.py` | Blade variant override: `use(key_or_dict, overrides)` context for any blade parameters, and the sweep |
-| `sheets/` | SVG sheet library (`lib.py`, `tbl.py`, `render.py`) and the eleven sheets of the set `a000.py` (cover, two pages), `a101.py`, `a103.py`, `a104.py`, `a301.py`, `a401.py`, `a501.py`, `a502.py`, `a503.py`, `a601.py` (and `wtbl.py`, the schedule table helper). `a004.py` (blade sweep study) is a study sheet that is not in the set: `build.py` does not build it and A-000 does not list it; the file is kept |
+| `sheets/` | SVG sheet library (`lib.py`, `tbl.py`, `render.py`) and the twelve sheets of the set `a000.py` (cover and the open-item pages), `a101.py`, `a103.py`, `a104.py`, `a301.py`, `a401.py`, `a501.py`, `a502.py`, `a503.py`, `a601.py`, `a701.py` (line launcher concept) (and `wtbl.py`, the schedule table helper). `a004.py` (blade sweep study) is a study sheet that is not in the set: `build.py` does not build it and A-000 does not list it; the file is kept |
 | `model/parts.py`, `model/references.py`, `model/schedules.py` | Parts table (vendor data, published prices and masses), references, and the computed schedules (panels, sealing, joints, frames, hatches) |
 | `tools/build_list.py` | Writes the build list workbook |
 | `tools/cad.py` | CadQuery model of the boat from the one model (hull shell, deck, caps, skegs and shoes, nozzles, props, blades, electronics, water plane); exports STEP, STL, glTF and the manifest |
@@ -47,7 +48,7 @@ Requires Python 3 with numpy, scipy, Pillow, Playwright (Chromium already instal
 
 `build.py` prints the checks report and continues even when checks fail. It writes to `out/`:
 
-- `RC_Recovery_Cat_Drawings_<REV>.pdf` (REV is `design.REV`, now v9.3) and `p1.png` to `p11.png` (A-000 twice, A-101, A-103, A-104, A-301, A-401, A-501, A-502, A-503, A-601). Every sheet title block carries `design.REV`.
+- `RC_Recovery_Cat_Drawings_<REV>.pdf` (REV is `design.REV`, now v9.3) and `p1.png` to `p18.png` (A-00R.1 to A-00R.5, A-000 three times, A-101, A-103, A-104, A-301, A-401, A-501, A-502, A-503, A-601, A-701). Every sheet title block carries `design.REV`.
 - `RC_Recovery_Cat_Build_List_v6.xlsx`, the build list workbook (parts with live formulas, channel plan, cooling plan, references)
 - `blade_sweep.csv`, the blade variant sweep at the design battery position (475) and the first alternate (520)
 - `checks.txt`, the checks report
@@ -109,6 +110,10 @@ Rounded underwater edges (v9.2): `BILGE_R` 15 (PENDING) on both bottom corners o
 The steering linkage (pushrod at Z = ZR, tie bar between the posts, nozzle horns, transom hole and bellows, bottom pintle and bushing) is modeled from the ASSUMED constants in `design.py`; the drive shaft length is derived in `model/geometry.py` from the joint, the prop, the motor face, a stub and a margin.
 
 Items with no published weight (nozzles, props, bought motor mounts, water fittings, ball links, bellows) are listed under the total and are not in it, so the total is a floor.
+
+## Line launcher (concept, A-701)
+
+An optional removable deck module that throws a floating line over a stranded sailboat. Every constant is `LAUNCHER_*` in `design.py`, tagged ESTIMATE or PROPOSED. `LAUNCHER_FITTED` is False, so nothing in the model changes until it is set. When True, `model/weights.py` adds one `Equipment` item at `LAUNCHER_LCG_X`. `model/geometry.py` `launcher(zd)` derives the module geometry for the sheet. `variants.launcher_rows(r)` solves the boat not fitted and fitted (each on its own deck, `D.LAUNCHER_FITTED` overridden for the call only) and `build.py` prints both rows. The plate is `LAUNCHER_PLATE` (104 x 130): the two bow caps stand on the sponsons over X 598.7 to 785.4, so the plate has to fit in the tunnel gap between them, not across the full deck width.
 
 ## Blade variants
 

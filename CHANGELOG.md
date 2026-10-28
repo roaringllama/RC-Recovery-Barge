@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-10-28: A-701 line launcher module (concept), launcher constants and trim rows
+
+A concept sheet and model hooks for an optional removable deck module that throws a floating line over a stranded sailboat. Nothing changes while `LAUNCHER_FITTED` is False (default); the existing sheets, checks and trim are unchanged.
+
+- `design.py`: new section LINE LAUNCHER (concept, A-701), every constant tagged ESTIMATE or PROPOSED (new tag PROPOSED added to the header). `LAUNCHER_PLATE` is 104 x 130 x 3, not the 285 first proposed: the two bow caps stand on the sponsons over X 598.7 to 785.4 and the plate (X 625 to 755) sits inside that range, so it has to fit in the 114.3 tunnel gap between them (5.15 clear each side, `LAUNCHER_CAP_CLR` 5). Shrinking W cannot clear the caps, so L was reduced.
+- `model/weights.py`: one `Equipment` item (170 g at X 690) only when `LAUNCHER_FITTED`. `model/geometry.py`: `launcher(zd)`. `model/variants.py`: `launcher(fitted)` context and `launcher_rows(r)` (not fitted against fitted, each solved on its own deck). `build.py` prints both rows and builds A-701 last (index and PDF page 18).
+- `sheets/a701.py`: side section 1:2, plan 1:2, dart detail 2:1, four-panel shot sequence, cycle table, notes (range, speed, energy, cocking force, recoil, line, why 45 deg, fixed spool, cocking by the reel, mount, fit) and the trim rows; all numbers from `design.py` or the model.
+- `sheets/a000.py`: the open-items table is now filled by height (`OPEN_H`) and runs to as many pages as it needs. The new launcher ESTIMATE rows made it three pages (A-000 sheet 2 and 3 of 3), so the PDF has 18 pages.
+- Tests: `test_every_sheet_builds` counts 14, launcher constants tagged, item only when fitted, rows, plate clear of the caps, A-701 text.
+- Findings: the funnel mouth reaches X 886, 73 past the bow tip and 58 past the push bar face; 297 above the deck. `LAUNCHER_MOUNT` (captive nuts in the aft deck box frame) is a given string; at X 690 the nearest frame member is the deck beam at X 660, which the sheet uses for the thumbscrews. 20 N peak cocking force over a 150 stroke would store about 1.5 J if the force rose linearly, against `LAUNCHER_E_STORED` 0.5 J, so the 20 N is an envelope (ESTIMATE).
+
 ## 2026-10-27, v9.3: builder documents, shared pages
 
 Fewer printed pages; no change to the model, the part marks, the nesting result or the 1:1 scale of the templates. Nesting layouts 47 to 11 pages, full size templates 120 to 82 pages.

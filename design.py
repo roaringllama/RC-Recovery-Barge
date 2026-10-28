@@ -9,6 +9,7 @@ Status tags in the comments:
   PENDING   the owner has not decided it
   ASSUMED   no published source
   ESTIMATE  weight guessed
+  PROPOSED  a concept value offered for review (the optional line launcher, A-701); the owner has not seen it
 
 Nothing numeric may appear in any other file except layout positions on sheets.
 When something does not fit, record it in the checks report; do not alter a value to make it pass.
@@ -222,6 +223,53 @@ BUMPER_TURN_DEG = 90.0          # nozzle turn about its post tested for the bump
 MOTOR_KV = 1200.0               # ATO 3670 kV, published
 PACK_V = (('3S', 11.1), ('2S', 7.4))   # nominal pack voltage by cell count (3.7 V per cell), published nominal; 3S is the design battery, 2S is a study case
 FLOOR_FRACTION = 0.08           # lowest steady rpm of a sensorless ESC as a fraction of the no-load rpm, ASSUMED (bench test required)
+
+# ---- LINE LAUNCHER (concept, A-701) ------------------------------------------------------------
+# An optional removable deck module that throws a floating line over a stranded sailboat (about LAUNCHER_TARGET). Nothing here changes the boat while LAUNCHER_FITTED is False.
+LAUNCHER_FITTED = False         # the module is optional; when False nothing else in the model changes (no weight item, no geometry), PROPOSED
+LAUNCHER_PLATE = (104.0, 130.0, 3.0)   # plate L (athwartships) x W (fore-aft) x thickness, birch ply, PROPOSED. L was proposed as 285 (full deck width) but the two bow caps stand on the sponsons over X 598.7 to 785.4, so the plate must fit in the tunnel gap between them: L = 2 x (TUNNEL_W / 2 - LAUNCHER_CAP_CLR) less rounding (A-701 checks it); W is unchanged
+LAUNCHER_X = 690.0              # centre of the plate on the hull X axis (aft of the bow caps' forward end, inside their X range, between them in Y), PROPOSED
+LAUNCHER_Z = 0.0                # height of the plate underside above the deck top; the plate sits on the deck (deck Z comes from the hydro result), PROPOSED
+LAUNCHER_CAP_CLR = 5.0          # clearance from the plate edge to the inner wall of each bow cap, PROPOSED
+LAUNCHER_ELEV = 45.0            # tube elevation, deg, fixed, PROPOSED
+LAUNCHER_TUBE = (25.0, 300.0, 1.5)   # bore, length, wall; PVC or printed, PROPOSED
+LAUNCHER_MUZZLE_FUNNEL = (45.0, 30.0)   # entry diameter tapering to the bore over this length along the axis (self-loading), PROPOSED
+LAUNCHER_STROKE = 150.0         # piston stroke, PROPOSED
+LAUNCHER_LATEX = '3/16 in OD x 1/16 in wall latex tubing, one loop'   # ESTIMATE
+LAUNCHER_DART = (20.0, 60.0, 17.0)   # diameter, length, mass g; closed-cell foam cylinder, brass nose weight, line eye at the tail, ESTIMATE
+LAUNCHER_NOSE_L = 6.0           # brass nose weight length (a disc of the dart diameter), ESTIMATE
+LAUNCHER_BRASS_RHO = 8.5        # g/cm3, brass, handbook value, used only for the nose weight mass shown on A-701, ESTIMATE
+LAUNCHER_FLOAT = (20.0, 10.0)   # tail float: diameter, length; bright foam toggle fixed on the line against the dart tail, ESTIMATE
+LAUNCHER_LINE = (0.5, 10000.0, 2.0)  # diameter mm, length mm, mass g; braided polyethylene floating line, ESTIMATE
+LAUNCHER_RANGE = 3250.0         # design range, fixed shot; anything inside the range gets draped, ESTIMATE
+LAUNCHER_AIM_DIST = (1000.0, 3000.0)   # aim distance window, barge to yacht, 1 to 3 m, PROPOSED
+LAUNCHER_TARGET = (813.0, 813.0)    # target yacht: LOA, mast height above its deck; sloop rig, ESTIMATE
+LAUNCHER_V0 = 5.5               # muzzle speed, m/s, ESTIMATE
+LAUNCHER_E_FLIGHT = 0.26        # energy in the dart at the muzzle, J, ESTIMATE
+LAUNCHER_E_STORED = 0.5         # energy stored in the latex at full draw, J, ESTIMATE
+LAUNCHER_COCK_F = 20.0          # peak cocking force through the line, N, ESTIMATE
+LAUNCHER_REEL = '500 size spinning reel, fixed spool, bail'   # ESTIMATE
+LAUNCHER_REEL_BODY = (60.0, 40.0)   # reel body drawn: length along the tube, height normal to it, ESTIMATE
+LAUNCHER_SPOOL = (34.0, 18.0)   # spool flange diameter and length along its axis, ESTIMATE
+LAUNCHER_SERVO_REEL = dict(l=STEER_SERVO['l'], w=STEER_SERVO['w'], h=STEER_SERVO['h'])   # continuous rotation standard servo, the same size as STEER_SERVO (40 x 40.5 on its side, 20 tall), ESTIMATE
+LAUNCHER_SERVO_TRIG = dict(l=23.0, w=12.2, h=29.0)   # micro servo, 9 g class, l along X, w across Y, h tall, ESTIMATE
+LAUNCHER_TRIG_ARM = 18.0        # trigger servo horn arm length, ESTIMATE
+LAUNCHER_TRIG_TRAVEL = (60.0, 30.0)   # trigger lever travel in deg: the first part opens the reel bail, the last part lifts the sear, PROPOSED
+LAUNCHER_PISTON = (24.0, 20.0)  # piston diameter and length (sliding fit in the bore, line passes through a hole on the axis), ESTIMATE
+LAUNCHER_PISTON_BACK = 5.0      # piston aft face this far from the breech face when cocked (sear holds it there), PROPOSED
+LAUNCHER_BREECH_INSET = 12.0    # breech axis point this far from the plate aft edge, PROPOSED
+LAUNCHER_BREECH_Z = 45.0        # breech axis height above the plate top (cradle), PROPOSED
+LAUNCHER_REEL_S0 = 30.0         # reel spool aft end station along the tube axis, measured from the breech face, PROPOSED
+LAUNCHER_REEL_GAP = 4.0         # clearance from the tube outside to the top of the reel body, PROPOSED
+LAUNCHER_BRACE_S = 190.0        # forward brace (stay from the plate fore edge) meets the tube underside at this station along the axis, PROPOSED
+LAUNCHER_EDGE = 4.0             # servo clearance from the plate edge, PROPOSED
+LAUNCHER_SERVO_Y = 30.0         # servo centerlines this far off the plate centerline (reel servo to port, trigger servo to starboard), PROPOSED
+LAUNCHER_SCREW_D = 4.0          # thumbscrew diameter (M4), PROPOSED
+LAUNCHER_SCREW_INSET = 10.0     # thumbscrew centers this far in from the plate side edges; fore-aft they sit on the nearest deck beam (DECK_BEAMS), PROPOSED
+LAUNCHER_CABLE_D = 6.0          # servo cable grommet diameter at the plate aft edge, PROPOSED
+LAUNCHER_MASS = 170.0           # g, total incl. reel, plate, servos, tube, dart, line, thumbscrews, ESTIMATE
+LAUNCHER_LCG_X = LAUNCHER_X     # X of the module center of gravity, ESTIMATE
+LAUNCHER_MOUNT = 'two M4 thumbscrews into captive nuts in the aft deck box frame'   # PROPOSED
 
 # ---- numerical settings (not design decisions) -------------------------------------------------
 FIT_EPS = 1e-6                  # tolerance for 'fits exactly' tests (numerical setting)

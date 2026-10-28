@@ -1,4 +1,4 @@
-"""A-000 Cover, drawing index, design basis, references and open items (two pages). The open items are parsed from design.py."""
+"""A-000 Cover, drawing index, design basis, references and open items (the cover and as many open-item pages as the rows need). The open items are parsed from design.py."""
 import re
 from .lib import *
 from .wtbl import wtable, wrap
@@ -46,8 +46,8 @@ def open_rows():
     return [(i['tag'], i['name'], S._fmt_value(i['value']) if isinstance(i['value'], (bool, int, float, str)) else '', _clean(i['text'])) for i in items]
 
 
-def build_cover(index, r):
-    sh = Sheet('A-000', 'Cover, index and design basis', 'Drawing index, design basis and references. Sheet 1 of 2.', 'none')
+def build_cover(index, r, n_total=2):
+    sh = Sheet('A-000', 'Cover, index and design basis', 'Drawing index, design basis and references. Sheet 1 of %d.' % n_total, 'none')
     sh.text(14, 40, 'RC RECOVERY BARGE', 'th')
     sh.text(14, 45, '32 in (%.0f mm) sailboat recovery catamaran, twin-screw balsa hull with a daggerboard, Kort nozzles and sealed plug hatches' % D.LOA, 't')
     sh.text(14, 49.5, 'Revision %s, %s. Every number on every sheet is computed from design.py; nothing is typed twice.' % (D.REV, D.REV_DATE), 't')
@@ -65,28 +65,43 @@ def build_cover(index, r):
     return sh
 
 
-def build_open():
-    sh = Sheet('A-000', 'Open items', 'Parsed from design.py: every PENDING, ASSUMED and ESTIMATE tag. Sheet 2 of 2.', 'none')
+OPEN_COLS = [('Tag', 16), ('Name', 40), ('Value', 20), ('Note from design.py', 119)]
+OPEN_STEP, OPEN_PAD = 3.1, 1.2
+OPEN_H = 192   # table height available above the title block, mm
+
+
+def open_pages():
+    """The open-item rows filled column by column (two per page), each column at most OPEN_H tall."""
     rows = open_rows()
-    cols = [('Tag', 16), ('Name', 40), ('Value', 20), ('Note from design.py', 119)]
-    step, pad = 3.1, 1.2
-    hs = [max(len(wrap(v, w, 'ts')) for (n, w), v in zip(cols, rw)) * step + pad for rw in rows]
-    half = sum(hs) / 2
-    acc, cut = 0, len(rows)
-    for i, h in enumerate(hs):
-        if acc + h / 2 > half:
-            cut = i
-            break
+    cols, acc, cur = [], 0, []
+    for rw in rows:
+        h = max(len(wrap(v, w, 'ts')) for (n, w), v in zip(OPEN_COLS, rw)) * OPEN_STEP + OPEN_PAD
+        if cur and acc + h > OPEN_H:
+            cols.append(cur)
+            cur, acc = [], 0
+        cur.append(rw)
         acc += h
+    if cur:
+        cols.append(cur)
+    return rows, [cols[i:i + 2] for i in range(0, len(cols), 2)]
+
+
+def build_open(n_total):
+    rows, pages = open_pages()
     counts = {t: sum(1 for x in rows if x[0] == t) for t in S.TAGS}
-    sh.text(14, 31, 'OPEN ITEMS: %s' % ', '.join('%d %s' % (counts[t], t) for t in S.TAGS), 'tb')
     fills = {'PENDING': '#fde7c8', 'ASSUMED': None, 'ESTIMATE': '#e6eefb'}
-    for x0, part in ((12, rows[:cut]), (217, rows[cut:])):
-        wtable(sh, x0, 36, cols, part, None, 'ts', step, pad, True, [fills[x[0]] for x in part])
-    return sh
+    out = []
+    for k, cols_ in enumerate(pages):
+        sh = Sheet('A-000', 'Open items', 'Parsed from design.py: every PENDING, ASSUMED and ESTIMATE tag. Sheet %d of %d.' % (k + 2, n_total), 'none')
+        sh.text(14, 31, 'OPEN ITEMS: %s' % ', '.join('%d %s' % (counts[t], t) for t in S.TAGS), 'tb')
+        for x0, part in zip((12, 217), cols_):
+            wtable(sh, x0, 36, OPEN_COLS, part, None, 'ts', OPEN_STEP, OPEN_PAD, True, [fills[x[0]] for x in part])
+        out.append(sh)
+    return out
 
 
 def build(r=None, index=None):
     r = r or hydro.design()
     index = index or []
-    return [build_cover(index, r), build_open()]
+    n = 1 + len(open_pages()[1])
+    return [build_cover(index, r, n)] + build_open(n)

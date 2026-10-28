@@ -160,6 +160,8 @@ def build_items(zd, bat_x=None, rho=None):
     it += blade_items(zd, rho)
     it += published_items(bat_x)
     it += list(D.OTHER_ESTIMATES)
+    if D.LAUNCHER_FITTED:                                  # optional line launcher module (A-701); nothing is added while it is False
+        it.append(('Equipment', 'Line launcher module (A-701), plate X %.0f' % D.LAUNCHER_X, D.LAUNCHER_MASS, D.LAUNCHER_LCG_X))
     return it, area
 
 

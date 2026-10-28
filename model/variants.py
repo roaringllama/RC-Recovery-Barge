@@ -68,6 +68,31 @@ def plan_rows():
     return rows
 
 
+@contextmanager
+def launcher(fitted=True):
+    """Model context with the line launcher fitted (or not): installs D.LAUNCHER_FITTED and restores it on exit. Nothing in design.py is changed on disk."""
+    saved = D.LAUNCHER_FITTED
+    D.LAUNCHER_FITTED = fitted
+    try:
+        yield fitted
+    finally:
+        D.LAUNCHER_FITTED = saved
+
+
+def launcher_rows(r=None):
+    """Trim with the line launcher not fitted, then fitted: weight, LCG, stern draft, bow draft, trim, water over the nozzle top, margin after the trough,
+    the failed checks. Each case is solved on its own deck at the design battery position (the deck is built parallel to the waterline), like plan_rows.
+    `r` is the design result of the current setting and is reused for the case that matches D.LAUNCHER_FITTED."""
+    rows, now = [], D.LAUNCHER_FITTED
+    for fitted in (False, True):
+        with launcher(fitted):
+            rr = r if (r is not None and fitted == now and r.get('bat_x') == D.DESIGN_BAT_X) else hydro.design()
+            res = checks.run_all(rr)
+            rows.append(dict(fitted=fitted, W=rr['W'], G=rr['G'], d0=rr['d0'], bow=rr['bow'], trim=rr['trim'], over=rr['over'], margin=rr['over'] - D.TROUGH,
+                             failed=[n.split()[0] for n, ok, _ in res if not ok], r=rr, results=res))
+    return rows
+
+
 def failed(results):
     """Names (numbers) of failed checks; a warning-only failure is marked (warn)."""
     out = []

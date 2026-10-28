@@ -418,12 +418,12 @@ def test_every_sheet_carries_the_revision(r):
 # ---- schedule sheets, open items, parts -----------------------------------------------------------
 
 def test_every_sheet_builds(r):
-    from sheets import a000, a101, a103, a104, a301, a401, a501, a502, a503, a601, a004
+    from sheets import a000, a101, a103, a104, a301, a401, a501, a502, a503, a601, a701, a004
     alts = [hydro.at(x, r) for x in D.ALT_BAT_X]
     sweep, _ = variants.sweep()
     shs = a000.build(r, [a000.SELF + (a000.CONTENTS,)]) + [a101.build(r, alts), a103.build(r), a104.build(r), a301.build(r, alts),
-           a401.build(r, alts), a501.build(r), a502.build(r), a503.build(r), a601.build(r, alts, checks.run_all(r)), a004.build(sweep)]
-    assert len(shs) == 12 and all(s.svg().startswith('<svg') for s in shs)
+           a401.build(r, alts), a501.build(r), a502.build(r), a503.build(r), a601.build(r, alts, checks.run_all(r)), a701.build(r), a004.build(sweep)]
+    assert len(shs) == 14 and all(s.svg().startswith('<svg') for s in shs)
 
 
 def test_open_items_find_every_tag():
@@ -581,3 +581,58 @@ def test_weights_include_bar_and_aft_box(r):
     names = [n for _, n, _, _ in r['items']]
     assert any(n.startswith('Push bar core') for n in names) and any(n.startswith('Aft deck beams') for n in names)
     assert not any('push pad' in n.lower() for n in names)
+
+
+# ---- line launcher module (concept A-701) -------------------------------------------------------------------------
+def test_launcher_constants_are_tagged_and_off_by_default():
+    import re
+    src = open(os.path.join(ROOT, 'design.py')).read()
+    lines = [ln for ln in src.splitlines() if re.match(r'LAUNCHER_[A-Z_0-9]+ = ', ln)]
+    assert len(lines) >= 30
+    for ln in lines:
+        assert ('ESTIMATE' in ln.split('#', 1)[-1] or 'PROPOSED' in ln.split('#', 1)[-1]), ln
+    assert D.LAUNCHER_FITTED is False
+    assert D.LAUNCHER_PLATE[1:] == (130.0, 3.0) and D.LAUNCHER_X == 690.0 and D.LAUNCHER_ELEV == 45.0
+    assert D.LAUNCHER_TUBE == (25.0, 300.0, 1.5) and D.LAUNCHER_DART == (20.0, 60.0, 17.0) and D.LAUNCHER_LINE == (0.5, 10000.0, 2.0)
+    assert D.LAUNCHER_LCG_X == D.LAUNCHER_X and D.LAUNCHER_SERVO_REEL['h'] == D.STEER_SERVO['h']
+
+
+def test_launcher_item_only_when_fitted(r):
+    assert not any(g == 'Equipment' for g, _, _, _ in r['items'])                 # default: nothing changes
+    with variants.launcher(True):
+        rr = hydro.design()
+    items = [i for i in rr['items'] if i[0] == 'Equipment']
+    assert len(items) == 1 and items[0][2] == D.LAUNCHER_MASS and items[0][3] == D.LAUNCHER_LCG_X
+    assert D.LAUNCHER_FITTED is False and abs(hydro.design()['W'] - r['W']) < 1e-9
+    assert abs(rr['disp'] - rr['W']) < 1.0 and rr['W'] > r['W'] + D.LAUNCHER_MASS - 1.0
+
+
+def test_launcher_rows_fitted_against_not_fitted(r):
+    rows = variants.launcher_rows(r)
+    assert [q['fitted'] for q in rows] == [False, True]
+    nof, fit = rows
+    assert abs(nof['W'] - r['W']) < 1e-9 and abs(nof['d0'] - r['d0']) < 1e-9
+    assert fit['W'] > nof['W'] and fit['G'] > nof['G'] and fit['bow'] > nof['bow']          # heavier, further forward, bow deeper
+    assert abs(fit['margin'] - (fit['over'] - D.TROUGH)) < 1e-9 and isinstance(fit['failed'], list)
+    assert D.LAUNCHER_FITTED is False                                                      # the override is restored
+
+
+def test_launcher_plate_clears_the_bow_caps(r):
+    L = G.launcher(r['deck'])
+    x0, x1, y0, y1 = L['plate']
+    assert L['clear'] and L['gap'] >= D.LAUNCHER_CAP_CLR
+    assert abs(L['cap_inner'] - D.TUNNEL_W / 2) < 1e-9 and y1 < L['cap_inner'] - D.LAUNCHER_CAP_CLR + 1e-9
+    assert L['cap_x'][0] <= x0 and x1 <= L['cap_x'][1]                                     # the plate is inside the caps' X range, so it must fit between them in Y
+    assert abs(L['z_under'] - r['deck'](D.LAUNCHER_X)) < 1e-9 and abs(L['z_top'] - L['z_under'] - D.LAUNCHER_PLATE[2]) < 1e-9
+    assert abs(L['screw_spacing'] - (D.LAUNCHER_PLATE[0] - 2 * D.LAUNCHER_SCREW_INSET)) < 1e-9 and L['beam'] in D.DECK_BEAMS
+
+
+def test_a701_sheet_text_and_index(r):
+    from sheets import a701
+    sh = a701.build(r)
+    svg = sh.svg()
+    assert sh.no == 'A-701' and sh.title == 'Line launcher module, concept' and 'Concept for review. All values ESTIMATE or PROPOSED, see design.py.' in svg
+    assert chr(0x2014) not in svg and chr(0x2013) not in svg
+    rows = variants.launcher_rows(r)
+    assert '%.1f' % rows[0]['W'] in svg and '%.1f' % rows[1]['W'] in svg
+    assert 'A-701' in open(os.path.join(ROOT, 'build.py')).read() or 'a701' in open(os.path.join(ROOT, 'build.py')).read()

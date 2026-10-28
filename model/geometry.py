@@ -791,3 +791,60 @@ def nozzle_margins(deg, plan=None):
 def nozzle_margin_rows(turn=None, plan=None):
     """nozzle_sweep rows with the margins to the deck outline added."""
     return [dict(row, **nozzle_margins(row['deg'], plan)) for row in nozzle_sweep(turn)]
+
+
+# ---- line launcher module (concept A-701): derived geometry, nothing here is used while D.LAUNCHER_FITTED is False ------------------
+def launcher(zd):
+    """Geometry of the line launcher for a deck function zd, in hull coordinates (X forward, Z up, Y to port). Axis frame: s along the tube
+    axis from the breech face (forward and up), n normal to it in the XZ plane (up and aft), so a point (s, n) is at
+    X = xb + s cos(e) - n sin(e), Z = zb + s sin(e) + n cos(e). Returns dict with the plate, the axis points, the tube, funnel and
+    piston stations, the reel and servo boxes, the screws, the overall height and the clearance to the bow caps."""
+    pl, pw, pt = D.LAUNCHER_PLATE
+    bore, tl, wall = D.LAUNCHER_TUBE
+    fd, fl = D.LAUNCHER_MUZZLE_FUNNEL
+    e = math.radians(D.LAUNCHER_ELEV)
+    c, sn = math.cos(e), math.sin(e)
+    deck = zd(D.LAUNCHER_X)
+    z_under = deck + D.LAUNCHER_Z
+    z_top = z_under + pt
+    x0, x1 = D.LAUNCHER_X - pw / 2, D.LAUNCHER_X + pw / 2
+    xb, zb = x0 + D.LAUNCHER_BREECH_INSET, z_top + D.LAUNCHER_BREECH_Z
+
+    def at(s, n=0.0):
+        return (xb + s * c - n * sn, zb + s * sn + n * c)
+
+    od = bore + 2 * wall
+    fun = [at(tl, od / 2), at(tl + fl, fd / 2), at(tl + fl, -fd / 2), at(tl, -od / 2)]
+    tube = [at(0, od / 2), at(tl, od / 2), at(tl, -od / 2), at(0, -od / 2)]
+    top_z = max(p[1] for p in fun + tube)
+    # piston and what rides in front of it, cocked: piston, tail float, dart
+    pd, plen = D.LAUNCHER_PISTON
+    p0 = D.LAUNCHER_PISTON_BACK
+    fdia, flen = D.LAUNCHER_FLOAT
+    ddia, dlen, dmass = D.LAUNCHER_DART
+    s_float = p0 + plen
+    s_dart = s_float + flen
+    s_nose = s_dart + dlen
+    # reel body below the tube, parallel to it, its aft end (the spool) at LAUNCHER_REEL_S0
+    rl, rh = D.LAUNCHER_REEL_BODY
+    n_top = -(od / 2 + D.LAUNCHER_REEL_GAP)
+    reel = [at(D.LAUNCHER_REEL_S0, n_top), at(D.LAUNCHER_REEL_S0 + rl, n_top), at(D.LAUNCHER_REEL_S0 + rl, n_top - rh), at(D.LAUNCHER_REEL_S0, n_top - rh)]
+    # servos lie on the plate; the reel servo to port forward, the trigger servo to starboard aft
+    sr, st = D.LAUNCHER_SERVO_REEL, D.LAUNCHER_SERVO_TRIG
+    reel_servo = Box(x1 - D.LAUNCHER_EDGE - sr['l'], x1 - D.LAUNCHER_EDGE, D.LAUNCHER_SERVO_Y - sr['w'] / 2, D.LAUNCHER_SERVO_Y + sr['w'] / 2, z_top, z_top + sr['h'])
+    trig_servo = Box(x0 + D.LAUNCHER_EDGE, x0 + D.LAUNCHER_EDGE + st['l'], -D.LAUNCHER_SERVO_Y - st['w'] / 2, -D.LAUNCHER_SERVO_Y + st['w'] / 2, z_top, z_top + st['h'])
+    beam = min(D.DECK_BEAMS, key=lambda b: abs(b - D.LAUNCHER_X))
+    ys = pl / 2 - D.LAUNCHER_SCREW_INSET
+    screws = [(beam, ys), (beam, -ys)]
+    cable = (x0, D.LAUNCHER_SERVO_Y)
+    # bow caps: inner wall of each sponson over the plate, and the cap X range
+    hz = housing(zd)
+    inner = min(float(inner_wall_y(x0)), float(inner_wall_y(x1)))
+    gap = inner - pl / 2
+    cap_x = (hz['x0'], hz['x1']) if hz and hz['kind'] == 'cap' else None
+    brace = (at(D.LAUNCHER_BRACE_S, -od / 2), (x1 - D.LAUNCHER_EDGE, z_top))
+    return dict(at=at, deck=deck, z_under=z_under, z_top=z_top, plate=(x0, x1, -pl / 2, pl / 2), thick=pt, xb=xb, zb=zb, e=e, od=od, tube=tube, funnel=fun,
+                muzzle=at(tl), mouth=at(tl + fl), height=top_z - deck, height_plate=top_z - z_under,
+                p0=p0, s_float=s_float, s_dart=s_dart, s_nose=s_nose, reel=reel, reel_servo=reel_servo, trig_servo=trig_servo,
+                screws=screws, screw_spacing=2 * ys, cable=cable, beam=beam, cap_x=cap_x, cap_inner=inner, gap=gap, clear=gap >= D.LAUNCHER_CAP_CLR - D.FIT_EPS,
+                brace=brace, nose_mass=math.pi * (ddia / 2) ** 2 * D.LAUNCHER_NOSE_L * D.LAUNCHER_BRASS_RHO / 1000)
